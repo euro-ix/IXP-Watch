@@ -1,0 +1,61 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+
+<!-- #BeginTemplate "template1.dwt" -->
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+	<meta name="language" content="en">
+	<meta name="robots" content="index, follow">
+
+	<!-- #BeginEditable "docmeta" -->
+	<meta name="description" content="LONAP Internet Exchange Point based in London, UK">
+	<meta name="keywords" content="lonap, peering, london, ixp, nap, internet, internet exchange, exchange point, internet exchange point, peering point">
+	<meta name="title" content="LONAP: IXP-Watch">
+	<title>LONAP: IXP-Watch</title>
+	<!-- #EndEditable -->
+
+	<link rel="stylesheet" type="text/css" href="http://stats.lonap.net/lonap1.css">
+	
+</head>
+
+<body>
+	<!-- header -->
+	<div class="header"></div>
+	<!-- end header -->
+
+	<!-- navigation -->
+
+	<a name="content"></a>
+	
+	<!-- #BeginEditable "body" -->		
+	<div class="content">
+
+
+		<div class="breadcrumb"><a href="http://www.lonap.net/">Home</a> » <a href="http://stats.lonap.net/">Stats</a> » <a href="/ixpwatch">IXP-Watch</a></div>
+
+		<h1>IXP-Watch</h1>
+		<p>IXP-Watch monitors exchange health and layer 2 parameters by taking traffic samples of broadcast and flooded traffic, currently every 15 minutes, for 15 minutes.</p>
+		<p>Monitoring includes the number of Non-IP packets, ICMP and ARP brodcasts seen on the peering LAN.</p>
+		<p>When a member disconnects or stops using an IPv4 address, we bind these addresses to a local monitoring machine in order to reduce the amount of background ARP. These are known as &quot;sponged&quot; addresses. BGP connection attempts to these addresses are also counted.</p>
+
+		<h2>Current Reports</h2>
+    <p>[<a href="report_1.shtml">Latest</a> | <a href="report_2.shtml">+ 30 minutes</a> | <a href="report_3.shtml">+ 45 minutes</a> |<a href="report_4.shtml"> + 1 hour</a> ]</p>
+
+		<h2>Graphs</h2>
+
+		<p><b>ARP requests per minute</b></p><img src="./graphs/arp.png"><br />
+		<p><b>NON-IP packets per minute</b></p><img src="./graphs/non-ip.png"><br />
+		<p><b>ICMP Packets per minute</b></p><img src="./graphs/icmp.png"><br />
+		<p><b>ICMPv6 Packets per minute</b></p><img src="./graphs/icmp6.png"><br />
+		<p><b>Sponged ARP requests per minute</b></p><img src="./graphs/sponge.png"><br />
+		<p><b>BGP connects to dead/sponged addresses (in 15 mins)</b></p><img src="./graphs/deadbgp.png"><br />
+
+		<!-- #EndEditable -->
+	</div>
+
+</body>
+
+<!-- #EndTemplate -->
+
+</html>

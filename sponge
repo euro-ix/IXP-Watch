@@ -1,0 +1,214 @@
+#!/bin/bash
+
+# 2003-02-22 00:48 <robl@linx.net>
+# Script to manage 'arp sponges' without too much hassle.
+#
+# 2003-08-12 - Added path to "ip" because Redhat doesn't put
+# /sbin in user paths by default.
+#
+# 2012-05-17 - <rob@lonap.net> Note there are better things than
+# This available now for controlling ARP. But as this works
+# nicely with ixp-watch reports, it is left here as-is.
+# (Works with linux. Untested on other platforms.)
+
+# Copyright 2003 - 2012 London Internet Exchange Ltd ('LINX')
+# Copyright 2012 - Robert Lister <rob@lonap.net>
+# See the file LICENSE for further details.
+#
+# This file is part of IXP Watch
+#
+# IXP Watch is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, version v2.0 of the License.
+#
+# IXP Watch is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+# for more details.
+#
+# You should have received a copy of the GNU General Public License v2.0
+# along with IXP Watch If not, see:
+#
+# http://www.gnu.org/licenses/gpl-2.0.html
+
+
+### NOTE: requires the user be able to run the "ip" command
+
+INTERFACE="eth0"
+MASK="24"
+SANITY_CHECK="193.203.5." # lock to only allow these addresses to be added.
+
+if [ ! -f /etc/arpsponges ] ; then
+ echo "Error: /etc/arpsponges could not be found"
+ exit 1
+fi
+
+ACTION=`echo "$1" | sed s/\^-//g | tr [A-Z] [a-z]`
+
+if [ "$ACTION" = "add" ] ; then
+
+echo ""
+printf "Checking address $2..."
+
+ IS_GOOD_ADDR=`echo "$2" | grep -c "$SANITY_CHECK"`
+ if [ ! "$IS_GOOD_ADDR" = "1" ] ; then
+  printf "\b... *** FAILED! *** \n"
+  echo "Bad address: $2 for interface $INTERFACE/$SANITY_CHECK"
+  echo "Are you adding the sponge to the right server?"
+  echo ""
+  exit 1
+ fi
+
+ if [ ! "$3" = "-APPLY" ] ; then
+
+ IS_ALREADY_SPONGED=`grep -c -w "^$2" /etc/arpsponges`
+   if [ ! "$IS_ALREADY_SPONGED" = "0" ] ; then
+    printf "\b... *** FAILED! *** \n"
+    echo "- $2 is ALREADY in /etc/arpsponges."
+    echo "- use \"sponge apply\" to refresh the interface if needed."
+    exit 1
+   fi
+ fi 
+
+printf "...OK ($INTERFACE mask $MASK)\n"
+
+printf "Checking address is not live before adding..."
+
+ping -c 3 $2 > /dev/null
+
+PINGRESULT="$?"
+
+if [ "$PINGRESULT" = "0" ] ; then
+ printf "\b... *** FAILED! ***\n - the address $2 is still alive!\n"
+ arp -a $2
+ echo ""
+ exit 1
+fi
+
+if [ "$PINGRESULT" = "1" ] ; then
+  printf "...OK - seems dead to me (good!)\n"
+else
+ printf "\b... *** FAILED! ***\n - PING failed for some reason!\n\n"
+ exit 1
+fi
+
+printf "Adding $2 to interface $INTERFACE..."
+
+/sbin/ip addr add $2/$MASK dev $INTERFACE
+
+ADDRESULT="$?"
+
+if [ "$ADDRESULT" = "0" ] ; then
+ printf "...Success!\n\n"
+
+  if [ ! "$3" = "-APPLY" ] ; then
+   /sbin/ip addr list dev $INTERFACE
+   echo ""
+   echo "- remember to add a comment to ip-alloc.txt file!"
+   echo "$2">>/etc/arpsponges
+  fi
+
+else
+
+ printf "\b... *** FAILED! ***\n - IP addr add command failed for some reason!\n\n"
+ exit 1
+fi
+
+fi # end of add bit!
+
+#######################################################################
+
+if [ "$ACTION" = "apply" ] ; then
+
+ # Delete all secondary IP addresses from the interface:
+ printf "Deleting all secondary addresses from $INTERFACE matching $SANITY_CHECK..."
+ /sbin/ip addr list dev $INTERFACE | grep "inet " | grep $SANITY_CHECK | grep "scope global secondary" | \
+  awk -v interface="$INTERFACE" '{print "/sbin/ip addr del "$2" dev "interface}' | sh
+ printf "...OK\n"
+
+ printf "Adding addresses from /etc/arpsponges:\n\n"
+
+ awk -v exec="$0" '{print exec" add "$1" -APPLY"}' /etc/arpsponges | sh
+ /sbin/ip addr list dev $INTERFACE
+
+fi # end of apply bit
+
+#######################################################################
+
+if [ "$ACTION" = "delete" ] ; then ACTION=del ; fi
+
+if [ "$ACTION" = "del" ] ; then
+
+ printf "Checking address $2..."
+
+ IS_GOOD_ADDR=`echo "$2" | grep -c "$SANITY_CHECK"`
+ if [ ! "$IS_GOOD_ADDR" = "1" ] ; then
+  printf "\b... *** FAILED! *** \n"
+  echo "Bad address: $2 for interface $INTERFACE/$SANITY_CHECK"
+  echo "Are you deleting the sponge from the right server?"
+  echo ""
+  exit 1
+ fi
+
+ IS_ALREADY_SPONGED=`grep -c -w "^$2" /etc/arpsponges`
+ if [ ! "$IS_ALREADY_SPONGED" = "1" ] ; then
+  printf "\b... *** FAILED! *** \n"
+  echo "- $2 is NOT in /etc/arpsponges."
+  echo "- use \"sponge add\" to add the IP address if needed."
+  exit 1
+ fi
+
+printf "Deleting address $2..."
+
+/sbin/ip addr del $2/$MASK dev $INTERFACE
+
+DELRESULT="$?"
+
+  if [ "$DELRESULT" = "0" ] ; then
+   printf "...Success!\n\n"
+   grep -v -w "$2" /etc/arpsponges > /tmp/arpsponges.$$
+   if [ -f /tmp/arpsponges.$$ ] ; then cat /tmp/arpsponges.$$ > /etc/arpsponges ; rm -f /tmp/arpsponges.$$ ; else
+    echo "Error: failed to update /etc/arpsponges!"
+    exit 1
+   fi
+
+  else
+   printf "\b... *** FAILED! ***\n - IP addr del command failed for some reason!\n\n"
+   exit 1
+  fi
+
+fi 
+
+
+#######################################################################
+
+
+if [ "$ACTION" = "" ] ; then
+echo ""
+echo "Usage:"
+echo "sponge add <ip_address>  - add sponge"
+echo "sponge del <ip_address>  - delete sponge"
+echo "sponge apply             - delete all, and re-apply all from file"
+echo "                       (slightly dangerous. Intended for use by boot script)"
+echo "sponge list              - list all CURRENTLY ACTIVE sponges."
+echo ""
+echo ""
+
+ACTION=list
+
+fi
+
+
+if [ "$ACTION" = "list" ] ; then
+
+echo ":::: Applied arp sponges on interface $INTERFACE:"
+
+awk -v interface="$INTERFACE" '{print "/sbin/ip addr list dev "interface" | grep "$1}' /etc/arpsponges | sh
+
+fi
+
+
+#######################################################################
+
+echo ""
+

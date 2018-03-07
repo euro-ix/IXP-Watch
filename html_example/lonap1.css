@@ -1,0 +1,309 @@
+﻿/*
+	LONAP Stylesheet 1
+	Seb 13/04/07
+*/
+
+/* use navigation1.css for full menu / nav2 for simplified */
+
+@import url("navigation3.css");
+
+/* General Styles */
+
+/* * {padding:0; margin:0;} */
+
+body {
+	background-color: #C0D0DC;
+	font-family: verdana,arial,helvetica;
+	font-size: small;
+/*
+	padding-left: 8px;
+	padding-top: 8px;
+*/
+}
+
+p {
+	margin-top: 10px;
+	margin-bottom: 10px;	
+}
+
+a {
+	color: #3366CC;
+	text-decoration: underline;
+}
+
+a:active {
+	color: #6699FF;
+}
+
+a:hover {
+	color: #6699FF;
+}
+
+pre {
+	border-left-color: #336699;
+	border-left-width: 5px;
+	border-left-style: solid;
+	padding-left: 8px;
+	padding-right: 8px;
+	padding-bottom: 5px;
+	padding-top: 5px;
+	margin-left: 25px;
+	background-color: #D1E0EF;
+	font-size: small;
+}
+
+/*
+ul {
+	margin-left: auto;
+}
+*/
+
+h1 {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: large;
+	margin-bottom: 5px;
+	margin-top: 10px;
+}
+
+h2 {
+	font-family: Arial, Helvetica, sans-serif;
+	font-weight: bold;
+	font-size: medium;
+	margin-bottom: 5px;
+	margin-top: 20px;
+}
+
+h3 {
+	font-family: Arial, Helvetica, sans-serif;
+	font-weight: bold;
+	font-size: small;
+	margin-bottom: 5px;
+	margin-top: 25px;
+}
+
+h4 {
+	font-family: Arial, Helvetica, sans-serif;
+	text-decoration: underline;
+	font-weight: normal;
+	font-size: small;
+}
+
+table {
+	border-collapse: collapse;
+	border-width:1px;
+	border-color:#54BEEF;
+	border-style: solid;
+	padding: 8px;
+	margin-top: 10px;
+	margin-bottom: 10px;
+}
+
+td {
+	border-collapse: collapse;
+	border-width:1px;
+	border-color:#54BEEF;
+	border-style: solid;
+	padding: 7px;
+}
+
+th {
+	border-collapse: collapse;
+	border-width:1px;
+	border-color:#54BEEF;
+	border-style: solid;
+	background-color: #dfefff;
+	padding: 7px;
+	text-align: left;
+}
+
+div.content #left {
+	float: left;
+	width: 300px;
+	padding-top: 20px;
+	padding-bottom: 20px;
+	text-align: center;
+}
+
+div.content #right {
+	width: 300px;
+	padding-top: 20px;
+	padding-bottom: 20px;
+	text-align: center;
+}
+
+a img {
+	border: none;
+}
+
+blockquote {
+	font-style: italic;
+	padding-top: 10px;
+	padding-bottom: 10px;
+}
+
+blockquote div {
+	font-style: normal;
+	font-weight: bold;
+	padding-left: 30px;
+	padding-top: 4px;
+}
+
+/* Specific Styles */
+
+div.header {
+	width: 780px;
+/*
+	background-image: url('images/lonap-website-banner4b.png');
+	background-image: url('images/lonaptrial6a.png');
+*/
+	background-image: url('images/lonap-header-20a.png');
+	background-color: #ffffff;
+
+	border-color: #879BC0;
+	border-style: solid;
+	border-width: 1px;
+
+	height: 72px;
+}
+
+div.content {
+	background-color: #ffffff;
+	border-color: #879BC0;
+	border-style: solid;
+	border-width: 1px;
+	padding-left: 10px;
+	padding-right: 10px;
+	padding-bottom: 15px;
+	margin-bottom: 2px;
+	width: 760px; /* width inherited less padding left+right */
+	float: left;
+	clear: both;
+/*	float: left; /* without this ff screws up vertically on front page.. with it ie floats the bottom nav to the right when ultra wide screen */
+		/* this problem needs to be dealt with !!! .. makes IE too close to previous section when ff drops it to next column */
+		/* when not having float, only main page has problems - seems to have been fixed after applying some other floats */
+}
+
+div.footer {
+	width: 780px;
+	text-align: center;
+	font-size: x-small;
+	line-height: 16px;
+	margin-top: 8px;
+	margin-bottom: 8px;
+}
+
+div.breadcrumb {
+	font-size: x-small;
+	margin-top: 5px;
+}
+
+div.content li {
+	list-style:none;
+	margin-top: 5px;
+	margin-bottom: 5px;
+	list-style-type: square;
+}
+
+div.redmsg {
+        border-collapse: collapse;
+        border-width:1px;
+        border-color:#cc0000;
+        border-style: solid;
+        background-color: #ffffcc;
+	font-weight: bold;
+        padding: 7px;
+        text-align: left;
+}
+
+
+/* Content */
+
+.highlight {
+	background-color: #FFFF00;
+}
+
+#eightpt {
+	font-size: 8pt;
+}
+
+div#redbox {
+	border-color: #FF0000;
+	border-width: 2px;
+	border-style: solid;
+	margin: 10px;
+	padding: 6px;
+}
+
+div#infrapic {
+	padding-top: 5px;
+	padding-bottom: 5px;
+	float: left;
+	width: 270px;
+	height: 200px;
+}
+
+div#infratext {
+	padding-top: 5px;
+	padding-bottom: 10px;
+	height: 200px;
+}
+
+div#index-intro {
+	float: left;
+	width: 70%;
+	border-right: 5px;
+}
+
+div#quicklinks {
+	float: right;
+	background-color: #F1F4F8;
+	padding-left: 8px;
+	padding-right: 8px;
+	padding-top: 5px;
+	padding-bottom: 5px;
+	
+	margin-bottom: 20px;
+	border-left-color: #879BC0;
+	border-left-style: solid;
+	border-left-width: 1px;
+
+	border-top-color: #879BC0;
+	border-top-style: solid;
+	border-top-width: 1px;
+	font-size: x-small;
+	width: 180px;
+}
+
+div#quicklinks a {
+	text-decoration: none;
+}
+
+div#quicklinks ul {
+	margin-left:0;
+	padding-left:0;
+}
+
+div#quicklinks li {
+	list-style-type: none;
+	margin-bottom: 5px;
+	padding-bottom: 5px;
+	border-bottom-color: #879BC0;
+	border-bottom-style: dotted;
+	border-bottom-width: 1px;
+}
+
+div#quicklinks h2 {
+	font-size: x-small;
+	background-color: #DDE4EE;
+	margin-left: -8px;
+	margin-right: -8px;
+	margin-top: -5px;
+	margin-bottom: -4px;
+	padding-top: 5px;
+	padding-left: 8px;
+	padding: right: 8px;
+	padding-bottom: 5px;
+}
+
+
+

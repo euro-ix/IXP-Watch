@@ -1,0 +1,60 @@
+#!/bin/bash
+
+#
+# Copyright 2003 - 2012 London Internet Exchange Ltd ('LINX')
+# Copyright 2012 - Robert Lister <rob@lonap.net>
+# See the file LICENSE for further details.
+#
+#
+# This file is part of IXP Watch
+#
+# IXP Watch is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, version v2.0 of the License.
+#
+# IXP Watch is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+# for more details.
+#
+# You should have received a copy of the GNU General Public License v2.0
+# along with IXP Watch If not, see:
+#
+# http://www.gnu.org/licenses/gpl-2.0.html
+
+
+# IXP Watch Sample Tidy:
+
+# Sample script to be called by cron, this clears out
+# the sample files after some number of days to avoid disk
+# filling up on the host machine!
+
+SAMPLESDIR=/var/ixpwatch/samples
+
+if [ ! -d "$SAMPLESDIR" ] ; then
+
+	echo "Unable to locate directory: $SAMPLESDIR"
+	exit 1
+
+fi
+
+cd $SAMPLESDIR
+
+# Check that we can cd in the right directory before we start
+# trying to delete stuff!
+
+if [ "$PWD" != "$SAMPLESDIR" ] ; then
+
+	echo "ERROR: Unable to cd to $SAMPLESDIR!"
+	exit 1
+
+fi
+
+# Remove samples files over 7 days old:
+find $SAMPLESDIR -type f -ctime +7 -exec rm {} \;
+# find $SAMPLESDIR -type f -ctime +7 -exec ls {} \;
+
+# Remove empty directories:
+find $SAMPLESDIR -type d -empty -exec rmdir {} \;
+# find $SAMPLESDIR -type d -empty -exec ls {} \;
+

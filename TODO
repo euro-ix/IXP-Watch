@@ -1,0 +1,41 @@
+IXP Watch Documentation     -    Robert Lister <rob@lonap.net>
+
+2003-01-28: Release version 1.5
+2003-03-07: Release version 1.6
+2003-04-10: Release version 1.7
+2005-12-30: Release version 1.8
+2012-05-17: Release version 1.9
+
+TODO LIST
+=========
+
+* Easier policy implementation rather than having to hack the script.
+  - Getting there but still not great.
+  - Probably the next release will have a seperate config file
+    rather than having to re-hack the script for each upgrade.
+
+* Maybe some realtime support for reading tshark output from stdin so
+  that immediate alerts could be sent as soon as bad traffic is seen
+  rather than waiting until the end of the session to report if found in
+  the sample.
+
+* More in-depth analysis of frames to help with debugging, for example,
+  there are occasions where it would be useful not only to e-mail me
+  about the frame, but to e-mail me a decode of the actual frame, to
+  save having to dig it out of the sample file.
+
+  - Haven't found a practical way to do this yet. When do we 'give up'
+    trying to extract packets?
+
+  - Probably write some sort of "dumpframe..." wrapper around tshark 
+    that dumps a specifc frame matching an IP address or MAC address/frame no.
+
+
+* Better handling of random jitter/garbage frames.
+
+* Delete the alarm and active state files on an age basis.
+
+* Graphing support/output to mrtg, rrd or gnuplot script for historical
+  graph view of number of ARPS/dead BGP sessions.
+  - Implemented in 1.7: output of metrics to a stats file.
+  - Implemented in 1.9: Basic HTML report and RRD graph support.

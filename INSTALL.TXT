@@ -1,0 +1,274 @@
+IXP Watch Documentation          -    Robert Lister <rob@lonap.net>
+
+2003-01-28: Release version 1.5
+2003-04-10: Release version 1.7
+2005-12-30: Release version 1.8
+2012-05-17: Release version 1.9
+2018-01-24: Release version 1.10
+
+INSTALLATION
+============
+
+Prerequisites:
+
+  - Working "libcap/libpcap" (usually there already on most OSs these days.)
+    (if not: http://www.tcpdump.org/)
+  - tshark - command line version of wireshark (formerly tethereal)
+    http://www.wireshark.org/
+  - Working DNS resolver (and possibly local DNS cache)
+  - Working MTA for sending alert messages
+  - Interface on the LAN you wish to monitor
+   - Note that this interface WILL REQUIRE AN IP address on on the
+     peering LAN for some of the layer 3 reporting to work.
+  - Disk space for sample files. I allow at least 10Gig, but this is because
+    I want to store a few months of samples.
+      The sample files here take up about 8Mb per day based on 15 Minute
+      sampling (running IXP Watch every 15 minutes for 15 minutes)
+      However, during storms or other flooded traffic, these files grow.
+      The largest individual sample file I've got is 430Mb.
+     (ixp-watch has some facility to manage large files to avoid disks filling up.)
+  - syslogd or logging facility if you want to syslog the traffic alarms etc.
+  - and, of course, the bash shell.
+  - some coffee, and some time.
+
+
+Optional Extras
+===============
+
+  - 'Arpwatch' tool (read intro.txt for more details)
+  - rrdtool (If you want to generate rrd files/graphs)
+  - Full "Wireshark" tool installed on your desktop/laptop PC for 
+    inspecting the sample files. 
+  - Enable 'sftp' or some other method for obtaining the samples!
+  - A dedicated user account that runs IXP Watch from crontab.
+
+The quick way to do this is to just look at the ixp-watch script,
+set the variables, make the required directories, and away you go. 
+
+Or, if you want to understand all the install steps, or if it doesn't 
+work for some reason, read all of this!
+
+Lastly, feel free to contact me.
+
+
+Getting it working
+==================
+
+  - First of all, verify that all of the components (especially 
+  tshark) are working on the interfaces:
+  
+  tshark -i <interface>
+  
+  - If you intend to run tshark from a non-root account (recommended),
+    you need to give it permissions to access the interface in 
+    promiscuous mode.
+  
+   - Under FreeBSD, give the user group that IXP Watch is running
+   as, permissions to the /dev/bpf* devices.
+   
+  - Under Linux, there is no equivalent, however Wireshark now
+    implements process privilege separation, so that the tools
+    such as tshark and wireshark can run as non-root users, but
+    the only packet capture process can run as root.
+
+    To do this, set dumpcap to setuid root: 
+    # chmod u+s /usr/bin/dumpcap
+
+    (See: http://wiki.wireshark.org/CaptureSetup/CapturePrivileges)
+
+   - Note that when package/security upgrades happen to wireshark,
+     often this permission gets broken and IXP Watch will just quietly
+     exit and stop working. (Need a way to detect this in future version!)
+
+1. Find a suitable home for "ixp-watch" - /home/xxxx/bin/...
+   or some other directory where you can place cron scripts.
+
+2. Make a directory for samples and reports to go. On our system, this 
+   is called /dump and it has capacity (20G) of space. Depending
+   on how long you wish to retain the sample files. 
+
+    Underneath this /dump directory, create two more directories:
+   
+   ./watch
+   ./samples
+   
+   Give the user/group appropriate permissions to these directories.
+   (at a minimum of course, the user running ixp-watch rwx and 
+   everybody else/group r-x
+   
+   The report files live under ./watch are small, and you may wish 
+   to retain these for longer as it's sometimes interesting for 
+   historical purposes to have the stats like amount of ARP 
+   increase over years or months.
+
+   
+3. Edit the ixp-watch script. You will need to set the variables 
+   at the top of the script so that it works correctly in your 
+   environment.
+
+   SAMPLE_ROOT=/path/to/your/samples
+   LOG_ROOT=/path/to/your/watch
+   
+   Other variables, such as the path to tshark, gzip, mail
+   etc may need to be set to the correct location.
+   I assume your "mail" program will accept the "-s subject" flag, 
+   however, not all (solaris) will, so you may need to change it to 
+   "mailx" or "/usr/ucb/mail" etc.
+
+
+   SAMPLE_TIME=nnn
+   
+   How long to tell 'tshark' to capture for. I capture for 15 minutes 
+   (SAMPLE_TIME=900) and the script runs from crontab every 15 minutes.
+
+
+
+   ARP_WARNLEVEL=nnnn
+
+   If the level of arps per minute reaches or exceeds this level,
+   ixp-watch will send you an alert and an e-mail copy of the report
+   so you can see the ARP stats.
+
+   Of course, when you first install ixp-watch, you may not have an idea
+   of what a good setting for this should be. It may take you a day or
+   so of gathering samples of ixp-watch reports to work out what your
+   current arps/min rate is. 
+
+   The default setting 4000 for us is unusual to have that many arp 
+   broadcasts in a minute.
+
+   My setting of 4000 isn't a global standard!
+
+   arps/minute used to be a lot higher before we implemented ixp-watch
+   and asked members to remove old dead BGP sessions and other things that
+   were causing unwanted ARPS. (Silly monitoring systems that try to ping 
+   the entire subnet, etc.)
+
+   MAX_SAMPLE_SIZE=10485760
+
+   This is introduced as of late 1.7 versions, and 1.8.
+   Occasionally, when there is some problem on the LAN, it will cause flooded
+   traffic to be captured by tshark. When this happens, a very large file
+   can be created. Attempting to analyze this file can cause excessive CPU and 
+   Memory usage. Instead of attempting to analyze this file, a warning is sent 
+   instead if the (uncompressed) sample size exceeds this threshold.
+
+   It is also possible to then delete files which exceed this, or another size
+   in order to stop disks from filling up. In times of network trouble the sample
+   files can occasionally be many gigabytes, and there may not be much we can do
+   with these files, or attempt to process them. (Or your disks will fill up
+   very quickly) (See the ENORMOUS_SAMPLE section of the script - which is 
+   commented out by default - for an example!)
+
+
+4. Check what the output of "ifconfig" looks like on your system, for 
+   the MY_ETHER line (how ixp-watch determines the ethernet 
+   address of the interface defined in CAP_INTERFACE)
+   
+   Uncomment the appropriate MY_ETHER line (or if none of them work, 
+   you'll need to get this working for your OS.)
+   
+   Solaris seems to have a silliness where it won't tell you the MAC
+   address of an interface with ifconfig unless you are root, but a
+   normal user can do arp -a however to find it out. *sigh*.
+   
+   Sun boxes with on-board ethernet interfaces store the MAC addresses
+   in the BIOS flash and not on the ethernet controller itself. 
+   Maybe that has something to do with it. Thanks to Arnold Nipper at
+   DE-CIX for providing the fixes so it works on Solaris :-)
+
+5. Do the same for the MY_IP variable. It should determine the IP 
+   address of the interface defined in CAP_INTERFACE.
+   I have included both the FreeBSD and Linux versions of these 
+   commands.
+   
+6. Define the CAP_INTERFACE= to be the interface you want
+   ixp-watch to run on, and the NETWORK= name to suit your 
+   network. 
+   
+   NETWORK= is purely a name by which reports and e-mails will be
+   identified rather than using the interface name. (If you have more
+   than one network and/or more than one machine running ixp-watch,
+   this variable should be different for each one, so that you
+   can tell where the alarms/reports are coming from, and which network
+   the alarms relate to!)
+
+7. REPORT_EMAIL / ALARM_EMAIL / ALARM_PAGER
+
+   REPORT_EMAIL = Where to send reports every time ixp-watch
+   finishes, regardless of status. If you run ixp-watch every 15 
+   minutes, REPORT_EMAIL gets these reports every 15 minutes!
+   
+   If you comment out REPORT_EMAIL, these reports will not be sent, but 
+   filed only in the ./watch directory under the date.
+   
+   We use this only to publish the reports on the web site. (The MTA on
+   the web server has a special e-mail address that runs a script to
+   publish the report on the correct bit of the web site...)
+
+   ALARM_EMAIL = Email address of where to send new alarms when they are 
+   detected.
+   
+   ALARM_PAGER = Where to e-mail urgent alarms (presumably a pager).
+   (only currently used for spanning tree alarm section.)
+   
+
+8. LOGHOST / LOG_FACIL / LOCAL_FACIL = syslog facility to log alarms to.
+
+   These work slightly differently on FreeBSD/Linux
+
+=> If you do not want to do any syslogging, leave all of these blank:
+   LOCAL_FACIL, LOG_FACIL and LOGHOST. 
+   
+=> FreeBSD's implementation of syslog / logger is slightly fancier in 
+   that you don't have to send syslog messages via the local syslogd, 
+   you can just do "logger -h <sysloghost>" to log directly to 
+   sysloghost without syslogd considering it locally.
+   
+   This gives the flexibility to have different facilities locally and
+   over the network, by defining LOCAL_FACIL and for the network,
+   LOG_FACIL. It is not always easy to find spare facilities on a very
+   well used network syslog host, and even harder to do if that syslog
+   host is a different OS that does different things with those
+   facilities.
+
+=> Linux/Solaris don't support the "-h" option for the "logger" tool,
+   but recent versions of Linux support the equivalent: "-n", you'll need
+   to tweak the script accordingly.
+   
+   OLD syslogd: You may need to log via syslogd.
+   Leave LOGHOST blank and define only LOCAL_FACIL, and set up 
+    your syslogging in /etc/syslog.conf and restart it. For example:
+   
+# IXP Watch events 
+local4.debug                                     /var/log/traffic.log
+local4.debug                                     @loghost.your.net
+
+   Effectively "LOGHOST" is being declared in syslog.conf, not 
+   ixp-watch.
+   
+   The drawback is that the facility/severity (in this case
+   "local4.debug") has to be the same locally and remotely, unlike the
+   FreeBSD logger tool which allows my script to have different
+   facilities for network and local.
+
+
+9. Supporting cron jobs: (/etc/crontab)
+
+0,15,30,45 * * * *  ixpwatch    /usr/local/bin/ixp-watch >/dev/null 2>&1
+3 9 * * *           ixpwatch    /usr/local/bin/ixp-watch-tidy > /dev/null 2>&1
+
+
+10. Add the IP Addresses for top arp targets that have gone away.
+    this 'Arp Sponge' technique uses the IXP Watch machine to
+    respond to arp requests and reduces the number of arp broadcasts
+    present on the network for IP addreses that are no longer in use.
+
+    Any router attempting to establish a BGP session to an IP address
+    on the IXP Watch interface will be logged in the "dead BGP session"
+    section of the reports.
+
+
+Right. I think that's about it. :-)
+
+Read the included .html files for further documentation/inspiration.

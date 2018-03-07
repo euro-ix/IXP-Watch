@@ -1,0 +1,276 @@
+<html>
+<head>
+<title>IXP Watch - Engineering Documentation</title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+</head>
+
+<body bgcolor="#FFFFFF" text="#000000">
+
+<h1><b><font face="Arial, Helvetica, sans-serif">IXP Watch - Operations 
+  Guide </font></b></h1>
+<p><b><font face="Arial, Helvetica, sans-serif" size="3">Introduction to IXP
+  Watch</font></b></p>
+<p><font size="2">IXP Watch is a script that runs on engineering servers, 
+  and is called by cron every 15 minutes. It is simply a shell script that calls 
+  a variety of tools to capture samples of traffic (broadcast and other flooded 
+  traffic visible on the peering networks), save this to a file and then analyze/process 
+  these sample files.</font></p>
+<p><font size="2">The current monitoring is performed by: <font face="Courier New, Courier, mono">&lt;your_server_here&gt;</font></font><br>
+</p>
+<p><b><font face="Arial, Helvetica, sans-serif" size="3">Report Files<br>
+  </font></b></p>
+<p><font size="2">At the end of each monitoring session of 15 minutes, IXP
+  Watch generates a session report file.<br>
+  <br>
+  These files are organized in a way they can be easily managed and located, stored 
+  as follows:<br>
+  </font><font face="Courier New, Courier, mono" size="2"><br>
+  <b>/dump/watch/YYYY/MM/DD</b></font></p>
+<p><font size="2">For example, 15 minute report files for 25 September 2002 would 
+  be in:</font></p>
+<p><font face="Courier New, Courier, mono" size="2"><b>/dump/2002/09/25</b></font></p>
+<p><font size="2">Additionally, the script creates a symbolic link which is updated 
+  automatically from:<br>
+  </font><font size="2" face="Courier New, Courier, mono"><br>
+  <b>/dump/watch/today<br>
+  /dump/watch/yesterday</b><br>
+  <br>
+  </font><font size="2">So you can quickly find the most recent reports.<br>
+  <br>
+  The files in these directories are named:</font><font size="2" face="Courier New, Courier, mono"><br>
+  <br>
+  <b>YYYY-MM-DD-HH-MM.TXT</b><br>
+  <br>
+  </font><font size="2"> For example:</font><font size="2" face="Courier New, Courier, mono"> 
+  2002-10-17-10-15.TXT<br>
+  </font><font size="2">Would be the report saved at 10:15 on 17 October 2002.</font><font size="2" face="Courier New, Courier, mono"><br>
+  </font></p>
+<p><font size="2" face="Courier New, Courier, mono"><br>
+  </font><font size="2">There is an explanation of the report format and what 
+  the various items mean: </font><font size="2" face="Courier New, Courier, mono"> 
+  <a href="linx_faq.html">linx_faq.html</a><br>
+  <br>
+  <b><font face="Arial, Helvetica, sans-serif" size="3"><br>
+  Sample Files</font></b><br>
+  <br>
+  </font><font size="2">In addition to the session reports, the actual traffic 
+  samples are saved in:</font><font size="2" face="Courier New, Courier, mono"><br>
+  <br>
+  <b>/dump/samples/YYYY/MM/DD</b><br>
+  <br>
+  </font><font size="2">For example, 15 minute sample files for 25 September 2002 
+  would be in:</font><font size="2" face="Courier New, Courier, mono"><br>
+  <b>/dump/samples/2002/09/25<br>
+  <br>
+  </b></font><font size="2">The files in these directories are named:</font><font size="2" face="Courier New, Courier, mono"><br>
+  <br>
+  <b>YYYY-MM-DD-HH-MM.gz<br>
+  </b></font></p>
+<p><font size="2">Additionally, the script creates a symbolic link which is updated 
+  automatically from:</font><font size="2" face="Courier New, Courier, mono"><br>
+  <br>
+  <b>/dump/samples/today<br>
+  /dump/samples/yesterday</b><br>
+  <br>
+  </font><font size="2">So you can quickly find the most recent traffic samples.<br>
+  <br>
+  <i>Note: There is a cron job daily_tidy which runs each day and automatically 
+  deletes samples over 90 days old.<br>
+  (This is to prevent them filling up the disk!)<br>
+  If you want to keep any unusual or interesting samples, cp these out of /dump/samples, 
+  or sftp them to your PC.</i><br>
+  </font><font size="2" face="Courier New, Courier, mono"><b><br>
+  <br>
+  <font face="Arial, Helvetica, sans-serif" size="3">Looking at Sample Files With 
+  Wireshark</font><br>
+  <br>
+  </b></font><font size="2">You can copy the sample files to your PC using SFTP 
+  or SCP and open them up in the Wireshark tool (gui tool) a Windows version of 
+  which can be downloaded from: <a href="http://www.wireshark.org/"><font face="Courier New, Courier, mono">http://www.wireshark.org</font></a> 
+  for inspection of traffic samples themselves.</font></p>
+<p><font size="2"><i>Tip: <b>You should turn off DNS resolution </b> before loading 
+  the samples into wireshark as they can be quite large and they take a very long time to load if DNS resolution is enabled. Untick the 
+  options just before you open the file.</i></font><font face="Courier New, Courier, mono" size="2"><br>
+  </font><font size="2"><b><br>
+  To produce a frame decode to forward via e-mail to somebody (Vendor, Member)</b></font> 
+  <br>
+  <br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" height="131">
+  <tr> 
+    <td height="187" bgcolor="#FFFF99"> 
+      <ol>
+        <li><font size="2"> <b>Select the frame</b> you want with the mouse.</font></li>
+        <li><font size="2"> From the <b>Edit</b> menu select <b>Preferences</b> 
+          and go in to the <b>Printing </b>section.</font></li>
+        <li><font size="2"> Check Format: Plain Text. Print to: File</font></li>
+        <li><font size="2"> Enter a<b> file name</b> you wish to output the frame 
+          to.</font></li>
+        <li><font size="2"> (If you want to save these settings so you don't have 
+          to do this bit again, hit <b>Save</b>)</font></li>
+        <li><font size="2">Click <b>Apply</b> and then <b>OK</b>.</font></li>
+        <li><font size="2">From the <b>File</b> menu select <b>Print Packet</b>. 
+          The selected packet will then be saved to the file.<br>
+          <br>
+          If you wish to save more than one frame, use <b>CTRL-M</b> (Mark Frame) 
+          and then use the Print option to Print Marked Frames. Use this in combination 
+          with the filter and 'Mark All frames' to select frames of a specific 
+          nature (i.e. from or to a specific MAC Address, IP address, Protocol 
+          etc.)</font><br>
+        </li>
+      </ol>
+    </td>
+  </tr></table>
+  
+
+<p><b><br>
+  Example Wireshark Filters</b><br>
+  <font size="2">You can enter a filter in to the filter box at the top of 
+  the Wireshark window.<br>
+  Note: tshark has two sorts of filters, <i>capture</i> filters, which work 
+  in the same way as tcpdump (see man pcap-filter and man tcpdump)  - 
+  can be specified to limit what gets captured, and <i>read</i> filters, can be 
+  specified to limit what gets displayed (say, from an existing file) <b>tshark</b> 
+  uses the -R command line parameter to specify read filter, which, if it contains 
+  spaces, must be in quotes. For example:</font><br>
+  <br>
+  <b><font face="Courier New, Courier, mono" size="2">tshark -r /dump/samples/today/2002-10-17-10-15.gz 
+  -R</font></b><font face="Courier New, Courier, mono" size="2" color="#0000FF"> 
+  &quot;not arp and ip.dst == 192.168.224.16&quot;</font><br>
+  <br>
+  <font size="2">With the Wireshark GUI tool, you would simply enter <font color="#0000FF">&quot;</font></font><font face="Courier New, Courier, mono" size="2" color="#0000FF">not
+  arp and ip.dst == 192.168.224.16</font><font color="#0000FF" size="2">&quot;</font><font size="2"> 
+  in the filter box at the bottom of the window.<br>
+  Wireshark is not covered in detail here (see the <a href="http://www.wireshark.org/">Documentation
+  pages</a>), but here are some useful examples of filters you can apply to help 
+  you find things:</font><br>
+  <br>
+</p>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" height="131">
+  <tr> 
+    <td height="236" bgcolor="#FFFF99"> 
+      <ul>
+        <li><font face="Courier New, Courier, mono" size="2">not arp </font><font size="2"><br>
+          (not arp frames)</font><font face="Courier New, Courier, mono" size="2"><br>
+          not arp and not ip </font><font size="2"><br>
+          (not arp and not IP frames)</font></li>
+        <li><font face="Courier New, Courier, mono" size="2">eth.addr == 00:90:69:55:04:1f<br>
+          </font><font size="2">(show only frames <b>from or to</b> MAC address</font><font face="Courier New, Courier, mono" size="2"> 
+          00:90:69:55:04:1f</font><font size="2">)</font></li>
+        <li><font face="Courier New, Courier, mono" size="2">eth.dst <b>!=</b> 
+          00:b0:4a:0e:2c:38 </font><font size="2"><br>
+          (show only frames <b>NOT</b> to MAC Address </font><font face="Courier New, Courier, mono" size="2">00:b0:4a:0e:2c:38</font><font size="2">)</font></li>
+        <li><font face="Courier New, Courier, mono" size="2">eth.src == 00:e0:bf:04:08:17 
+          </font><font size="2"><br>
+          (show only frames from MAC Address</font><font face="Courier New, Courier, mono" size="2"> 
+          00:e0:bf:04:08:17</font><font size="2">)</font></li>
+        <li><font face="Courier New, Courier, mono" size="2">ip.src == 192.168.224.12 
+          </font><font size="2"><br>
+          (show only frames <b>from</b> IP address </font><font face="Courier New, Courier, mono" size="2">192.168.224.12</font><font size="2">)</font><font face="Courier New, Courier, mono" size="2"><br>
+          <br>
+          </font><font size="2"><b>Slightly cleverer:</b></font><font face="Courier New, Courier, mono" size="2"><br>
+          <br>
+          </font></li>
+        <li><font face="Courier New, Courier, mono" size="2">eth.addr == 00:c0:7b:7e:4b:25 
+          and not ip.addr == 192.168.170.87<br>
+          </font><font size="2"> (Show only frames <b>from or to</b> MAC<font face="Courier New, Courier, mono"> 
+          00:c0:7b:7e:4b:25</font> but <b>NOT</b> from or to IP <font face="Courier New, Courier, mono">192.168.170.87</font>)</font></li>
+        <li><font face="Courier New, Courier, mono" size="2">tcp.flags.syn == 
+          1 and tcp.dstport == 179<br>
+          </font><font size="2">(Show <font face="Courier New, Courier, mono">TCP</font> 
+          packets in <font face="Courier New, Courier, mono">SYN</font> state 
+          to destination port <font face="Courier New, Courier, mono">179</font> 
+          (bgp open attempts))</font></li>
+      </ul>
+      </td>
+  </tr>
+</table>
+<b><br>
+<font size="3">An additional point and warning:</font></b><br>
+  <br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" height="131">
+  <tr> 
+    <td height="236" bgcolor="#FFFF99"> 
+      <p>When looking at sample files, remember that in certain circumstances, 
+        these files could occasionally contain actual customer data, for example, 
+        you may occasionally see things like POP3 passwords, fragments of e-mail 
+        messages and other payload data.<br>
+        <br>
+        It goes without saying really.<br>
+        <b>Respect the privacy of users and make absolutely sure that these things 
+        do not get passed on or used in any way.</b><br>
+        <br>
+        <b>We are only permitted to use these samples for diagnosing problems 
+        with the network, for gathering statistics about the network usage, and 
+        where required for the operational running of our network, and not for 
+        any other purpose.</b></p>
+      </td>
+  </tr></table>
+<p><br>
+  <font size="3" face="Arial, Helvetica, sans-serif"><b>Log files<br>
+  </b></font><br>
+  IXP Watch also logs to <font face="Courier New, Courier, mono" size="2">syslog</font> 
+  which stores messages in <font face="Courier New, Courier, mono" size="2">/var/log/traffic.log</font><br>
+  This will help you to easily determine when a particular type of frame was first 
+  seen (by looking at the log file for when it was reported)<br>
+  And from this, you can work out which traffic sample file the frame is in, and 
+  when the traffic was first spotted by IXP Watch.</p>
+  
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+  <tr>
+    <td bgcolor="#FFFF99"><font face="Courier New, Courier, mono" size="2">/var/log/traffic.log 
+      </font>(local events)</td>
+  </tr></table>
+	  	 <p><font size="3" face="Arial, Helvetica, sans-serif"><b>E-Mail Alarms</b></font></p>
+<p>IXP Watch sends E-mails to <font face="Courier New, Courier, mono" size="2"><b>YOUR_EMAIL@ADDRESS.HERE</b> 
+  </font> for any non IP or strange traffic that it may find, for example CDP, 
+  Spanning Tree, and other bad things are e-mailed out. You should investigate 
+  these e-mails and check if the reported traffic is still occurring.</p>
+<p><b>Alarms are generated only the first time that IXP Watch sees a suspect 
+  frame</b>, and then further alarms are suppressed.
+  This is because most of these frames happen on a constant basis, for example, 
+  CDP will generate regular identical updates every 60 seconds.<br>
+  (You would not want to receive an e-mail every 15 minutes warning you about 
+  the same traffic!)<br>
+  <br>
+  Where possible, IXP Watch consolidates multiple alarms in to one e-mail, 
+  so watch out for multiple alarms being present in one message. <br>
+  <br>
+  <font size="3" face="Arial, Helvetica, sans-serif"><b>Pager E-Mail Alarms about 
+  Spanning Tree</b></font></p>
+<p>If IXP Watch sees any <b>Spanning Tree</b> data at any time, it sends 
+  an e-mail message to <font face="Courier New, Courier, mono" size="2"><b>YOUR.PAGER@ADDRESS.HERE</b> 
+  </font> which is an alias to the Vodafone Pager of the oncall engineer.)<br>
+  <br>
+  Any spanning tree detected must be investigated promptly and the member concerned 
+  contacted about it.)
+  (If the member is also presenting more than one MAC address, then this is a 
+  grounds for possible disconnection at this point for an MoU violation.)<br>
+  <br>
+  Verify that the STP traffic is still happening and if it is, contact the member 
+  concerned.<br>
+  <br><table width="100%" border="0" cellspacing="0" cellpadding="0">
+  <tr>
+    <td bgcolor="#FFFF99"> <i>Note: Spanning Tree uses a different source MAC 
+      address to the member's router (it may be the STP Bridge MAC Address, not 
+      the member's MAC Address on their interface. Therefore you will need to 
+      do a little detective work on the switches, looking at the forwarding tables 
+      to determine which port on which switch the STP is coming from.)</i></td>
+  </tr></table>
+  <br>
+  <font size="3" face="Arial, Helvetica, sans-serif"><b>Alarm State Files</b></font><br>
+  <br>
+  Because IXP Watch only sends an alert about the first such seen frame, 
+  and subsequent frames which are identical will <i>not</i> generate an alarm, it needs to 'remember' in some way what it has seen before.<br>
+  <br>
+The state files that IXP Watch uses to determine if it has seen a particular 
+frame before or not, are stored in:
+<p><font face="Courier New, Courier, mono" size="2"><b>/dump/watch/alarms<br>
+  /dump/watch/active</b></font></p>
+<p>Deleting the entire contents of BOTH of these directories will 'reset' these 
+  state records and IXP Watch will alarm about things again asthough they 
+  were first seen.<br>
+</p>
+<p> <br>
+</p>
+</body>
+</html>

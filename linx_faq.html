@@ -1,0 +1,184 @@
+<HTML>
+<HEAD>
+<title>IXP Watch FAQ</title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1"></head>
+<body lang=EN-GB>
+<div class=Section1>
+</div>
+<P class="title">IXP Watch Information</P>
+
+IXP Watch is a script that runs on a LINX Engineering<br>
+server that has interfaces on the LINX peering network.<br>
+<br>
+Every 15 minutes, this script is called, and it samples 15 minutes of<br>
+the currently visible traffic - broadcast and background traffic - and<br>
+saves this in a traffic sample file.<br>
+<br>
+The engineering server also has bound to it, the IP addresses of members<br>
+that have gone away ('sponged IP addresses') or members with long term<br>
+problems with their LINX interfaces, (say, down for a few months or more) <br>
+<br>
+At the end of the 15 minutes the sample is saved, the script<br>
+then looks at the contents of the traffic sample file (using tshark)<br>
+and generates various plain text logs for different classes of traffic. <br>
+For example, all ARP queries will be logged to a file, Non-IP frames<br>
+logged to another file, and so on.<br>
+<br>
+These (big) log files are in turn summarized, de-duplicated, and brought<br>
+together into one report file which then appears on the LINX web site. <br>
+<br>
+The log files are deleted once the report has been generated, and the<br>
+traffic sample file itself is saved for further analysis if this is<br>
+required.  (For example, if we see an OSPF request from 192.168.1.59, <br>
+we will then need to inspect the sample file to see which MAC address is<br>
+originating these frames.) <br>
+<br>
+The sections that may appear in the report are as follows:<br>
+<br>
+<B>1. TOP 30 ARPERS</B><br>
+    Analysis of the top 30 hosts sending ARP requests. Whilst ARP is<br>
+    a normal part of IP, hosts near the top of the list usually have<br>
+    traffic destined for non-existent peers, or may just be a temporary<br>
+    problem. ARPs generated may also be caused by network monitoring<br>
+    systems trying to ping interfaces on the LINX peering network that<br>
+    are unavailable, etc. (The number to the left of each line is the<br>
+    count of the number of times that ARP request was seen in the sample.)<br>
+<br>
+    Troubleshooting ARP:<br>
+<br><ul> 
+    <li>Generally, as the MAC addresses on the LINX LAN remain fairly
+       static, set your ARP cache to a reasonably high timeout value.
+       When most ARP implementations see a different MAC address for
+       an already cached IP address, it will delete the old one from
+       its arp cache and use the new value instead.</li>
+    <li>Check for BGP sessions in Active state for peers that have gone
+       away either temporarily or permanently. Use the Looking
+       glasses / collector routers to verify the information.</li>
+    <li>Check any network monitoring systems that ping addresses on
+       the LINX LAN are up to date.</li>
+    <li>Gratuitous ARP - a host sends an ARP for its own IP address
+       in order to determine if another host on the same network
+       already has its IP address. If it gets a response then it
+       generally disables the interface and/or logs an error message.
+       (Duplicate IP Address detection, auto-configuration tools etc.)
+       - This feature can usually be turned off or reduced.</li>
+    <li>Proxy ARP - a host - generally a router - replies to ARP requests
+       for IP addresses other than itself. Very dangerous and you should
+       disable it explicitly on your LINX interfaces. Particularly Cisco
+       routers where, if on our /23 network, you accidentally configured A
+       /24 mask, the Cisco may then start to reply to ARP requests for hosts
+       that are not in your interface's configured /24 "subnet"</li>
+</ul>
+<br>
+<B>2.  BGP OPEN ATTEMPTS FOR RECLAIMED/DOWN IP ADDRESSES</B><br> 
+    Summary of routers that have been trying to establish BGP sessions to peers that have gone.
+    (which we can see being flooded to the LINX Network.)<br>
+    The BGP session will usually remain in Active state.<br>
+    This also logs tcp SYN requests for sponged IP addresses.<br>
+<br>
+    Generally an indication of a peering session that should be turned off.<br>
+<br>
+    Troubleshooting BGP Dead Sessions:<br>
+<br>
+<ul>
+    <li>Check for sessions in Active state on your routers and follow them up - 
+       can you ping the interface? Has the IP address been sponged
+       (If you CAN ping it, Compare the MAC address. If the MAC
+        address is <samp>00:90:27:12:bf:ce</samp> or <samp>00:90:27:12:42:06</samp> then this
+        IP address is on the LINX Engineering server.)</li>
+    <li>Are you trying to establish a session to the right AS?
+       The IP Address may have changed hands, AS could have changed etc.
+       Check for mismatched AS numbers etc.</li>
+    <li>Look on the linx OPS list for previous announcements from the
+       AS concerned. Use the <A HREF="/tools/">LINX Looking Glass</A> / collector router to
+       see what sessions exist there.</li>
+</ul>
+<B>3.  MARTIAN/ODD SNMP  </B><br>
+    SNMP requests being flooded to the peering network. Usually<br>
+    something trying to SNMP GET to an interface that is down.<br>
+<br>
+    Troubleshooting Martian/Odd SNMP:<br>
+<ul>
+    <li>Check your Network Monitoring System!</li>
+    <li>Check the routes to the interfaces are going the way you think.</li>
+    <li>Better still, use a loopback address (from your own IP range) </li>
+       to monitor SNMP internally.</li>
+</ul>
+<B>4.  SPONGE ARP REPLY ACTIVITY</B><br>
+    Included for information. If the engineering server responds to ARP<br>
+    requests for one of its IP addresses (sponged) then it will be<br>
+    recorded here. Some implementations seem to ARP for everything on the<br>
+    entire subnet anyway.<br>
+<br>
+<B>5.  NON IP TRAFFIC</B><br>
+    Anything not IPv4 is logged here.<br>
+    Includes: DEC, IPX, Loopback, SNA, NETBIOS, Spanning Tree,<br>
+    Vendor proprietary discovery protocols (CDP, EDP...)<br>
+    And just corrupted frames.<br>
+<br>
+    Troubleshooting non-IP traffic:<br>
+<br>
+<ul>
+    <li>Disable the offending protocol.<br>
+       i.e. Configure 'no cdp enable' on the LINX interface. (Cisco)</li>
+    <li>"DEC DNA Remote Console" is DEC MOP.
+       Configure 'no mop enabled' on your LINX Interface. (Cisco)
+       We have had reports that some versions of IOS have this feature
+       enabled but there is no command to turn it off. (i.e. DECNet
+       was removed from the CLI but some of it still is in the code!)</li>
+    <li>LOOP Loopback traffic - Keepalives.
+       Legacy keepalive/AUI/heartbeat frames being sent.
+       Used to determine if a transceiver is alive.
+       Most modern interfaces spot carrier transitions without the
+       need for these heartbeat frames.
+       Configure 'no keepalive' on your LINX Interface. (Cisco)</li>
+    <li>Garbage?
+       LINX will generally contact you if your router is emitting
+       large amounts of corrupted frames. Since the MAC Addresses are
+       corrupted, i.e. &quot;0e:a4:04:b8:02:95 -&gt; 95:a7:d7:e0:28:50&quot;
+       LINX will have to investigate these MAC addresses on the switches
+       to determine where the corrupted frames are coming from.
+       <br>
+       Check for overloaded interfaces and duplex mismatches.<br>
+       (All LINX interfaces are no auto negotiation, full duplex.)<br>
+       We have also seen this caused by software bugs and leaky<br>
+       VLANS, Broken tunelling protocols, overloaded CPU/buffers etc.</li>
+</ul>
+<br>
+<B>6.  NON UNICAST IP TRAFFIC</B><br>
+    Any IP packets directed to a multicast or broadcast address.<br>
+    Includes:  OSPF, DHCP, RIP, EIGRP, PIM etc.<br>
+<br>
+    Troubleshooting Non Unicast IP Traffic:<br>
+<br>
+<ul>
+    <li>Disable the IGP on your LINX interface (passive-interface)</li>
+    <li>Disable DHCP announcements (unconfigured interfaces etc.)</li>
+    <li>Unconfigured Cisco DNS settings sends DNS requests to 255.255.255.255</li>
+    <li>Unconfigured Cisco TFTP tries to tftp to 255.255.255.255<br>
+       (set the ip tftp source-interface to be the correct interface.)</li>
+</ul>
+<br>
+<B>7.  ICMP MESSAGES</B><br>
+    For information. Generally ICMP to sponged IP addresses, or ICMP<br>
+    that can be seen flooded to the LINX LAN.<br>
+    Can indicate black holes or interesting routing.<br>
+<br>
+<B>8.  NEW ALARMS SINCE LAST RUN</B><br>
+    New Non-IP Traffic/Non Unicast IP Traffic/STP etc that has been<br>
+    seen since the last 15 minute sample.<br>
+<br>
+    Alerts the LINX on-call engineer about the new (non MoU compliant) traffic via e-mail<br>
+    and certain things also get a pager message. We only want this once<br>
+    though, not for every instance of the frame!<br>
+<br>
+    New alarms since last run is a section that appears when there are<br>
+    new things that the IXP Watch hasn't seen before.<br>
+<br>
+    We also periodically clear down the cache of things seen, as it can<br>
+    get pretty big if somebody is sending corrupted frames/garbage<br>
+    (each corrupted frame is unique, usually seen only once.)<br>
+<br>
+<I>Last Update: 18/08/2002 - RobL</I><br>
+</body>
+</html>

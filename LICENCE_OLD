@@ -1,0 +1,37 @@
+
+
+** This is the OLD License which applied to all versons < 1.9 **
+
+*** As of version 1.9, IXP Watch is now released under the terms of the
+    v2 GNU general public licence.  See the file LICENCE for details. ***
+
+
+IXP Watch Licence
+=================
+
+IXP Watch script is created by London Internet Exchange Limited ("LINX"),
+and is the copyright of LINX.
+
+Certain other utilities used in conjunction with IXP Watch (like wireshark 
+are released under different terms and are not included under this licence.)
+
+Use and modification of the IXP Watch script itself is permitted free of
+charge to Internet Exchanges who are members (and only for so long as they
+remain members) of Euro-IX.
+
+Rather than distributing further copies at this stage, we encourage you to
+point Euro-IX member colleagues to the download site at Euro-IX.
+
+If you are a Euro-IX Member, you are encouraged to:
+
+1. Feed back any comments and suggestions about IXP Watch to LINX
+  (either using the euro ix technical list, or to <robl@linx.net>
+
+2. Contribute code changes, documents, papers, translations of IXP Watch
+   existing documentation in other languages, and further tools of use to
+   the IXP community!
+
+LINX accepts no liability for any loss or damage (including any economic
+loss or any loss of profit) howsoever arising out of the use or misuse of
+IXP Watch to the fullest extent permitted by law.
+

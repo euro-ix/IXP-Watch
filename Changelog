@@ -1,0 +1,93 @@
+
+* 1.10 - 2018-01-24 - <rob@lonap.net>
+
+  - Roll in some LONAP changes.
+  - Update TSHARK commands for updated version of tshark (requires explicit
+    "-Y" filter flag for reading samples.)
+  - Newer versions of tshark require "-f" capture filter.
+  - Add IPv6 Traffic type summary to report.
+  - Fixed IPv4 ICMP output (tshark output format changed)
+  - Minor changes to docs and comments.
+  - Included html files from LONAP as example for RRD stats page.
+
+* 1.9 - 2012-05-17 - <rob@lonap.net>
+  - I'm back. Different exchange this time...
+  - Changed references to tethereal in EURO-IX released version to tshark.
+  - Added basic RRDtool graph and html stats functionality.
+  - Other small changes.
+  - Include revised ixp-watch-tidy cron script.
+  - bug fix: newer versions of tshark changed output slightly for ARP.
+  - Now has GPL2 License as of 1.9 release. See LICENSE and LICENSE_OLD
+
+* 1.8 - 2005-12-30 - <robl@linx.net>
+  - better handling of huge samples with the MAX_SAMPLE_SIZE parameter.
+    Do not attempt to process a huge sample file, but just report this.
+    - i.e, do not try to process a 2GB sample received if the network breaks!
+  - You can optionally automatically delete huge samples to save disk space.
+    - see ENORMOUS_SAMPLE.
+  - run gzip with "nice -n 10" to reduce CPU on the box.
+  - run GZIP process in the background and don't wait for it to finish.
+  - now logs excess ARP events to syslog.
+  - now logs when ARP levels return to normal to syslog.
+  - exclude my own primary IP from capture samples.
+  - bug fix: newer versions of tethereal changed output slightly for CDP.
+
+* 1.7-interim 2003-10-20 - <robl@linx.net>
+  - better handling of l2tp and GRE traffic spew.
+  - bug fix: sponge tool - added full path name to "ip" commands.
+  - changed some of the tethereal command lines not to DNS resolve
+    when reading sample files, as when a large sample file comes in, 
+    this is too CPU intensive and/or takes too long to process.
+  - bug fix: alarms_arp.tmp file was in the wrong location.
+    (changed to $LOG_ROOT instead of $LOGDIR)
+  - NB: There has been an updated release of tethereal fixes 
+        several security holes. Also, I discovered my version was
+        crashing when it encountered an SNMP packet because of missing
+        snmp library. My version is now:
+
+        tethereal 0.9.14
+        Compiled with GLib 1.2.10, with libpcap 0.6, with libz 1.1.3,
+        without UCD-SNMP or Net-SNMP, without ADNS
+        Running on Linux 2.4.18
+
+* 1.7  - 2003-04-10 - <robl@linx.net>
+  - Things re-named to IXP Watch for marketing/copyright reasons :)
+  - LICENCE File added. Just in case you were not sure!
+  - Reports now show minutes rather than seconds duration.
+  - New counter for "ARPS Per minute" added. (Now we know minutes!)
+  - Added ARP storm detection and alerting feature
+  - Ability to write metrics for RRD graphs/monitoring system to a file.
+    (see WRITE_COUNTS and COUNTSFILE options)
+
+  - Documentation updated.
+
+  - Changed "sponge" tool: I accidentally hardcoded my "eth3.1" interface
+    into the awk line for "apply". Oops. Fixed so awk reads in $INTERFACE.
+
+  - Integrated Arnold Nipper's contributions. :-)
+
++ >>>  - 2003-03-18 - <arnold.nipper@de-cix.net>
+  - Added $MY_IP line for Solaris.
+  - Added $MY_ETHER line for Solaris.
+  - Added IPv6 address support
+  - New counter for IPv6 packets added.
+  - Added Top ARP targets feature (IP addresses being ARPed most)
+  - Change to awk expression to remove "?" in "arping for" lists.
+  - Tweak to Dead BGP report sorting.
+  - Other minor changes.
+
+
+* 1.6 - 2003-01-30 - <robl@linx.net>
+  - Added "and not ICMP" to bgp sample line.
+  - Changed ICMP report option to not report ICMP to $MY_IP.
+  - Corrected a spelling mistake in the TODO file.
+  - Redhat MY_IP= bit didn't seem to be working. 
+    Was returning mask and not IP. Corrected the awk statement.
+  - Included my "sponge" tool (for linux only) for managing arp sponges.
+    (In need of a little work but it is stable.)
+     Requires that /sbin/ip be suid root if non-root users wish to run it.
+
+* 1.5 - 2003-01-28 - <robl@linx.net>
+  Initial release.
+
+

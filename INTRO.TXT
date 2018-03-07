@@ -1,0 +1,220 @@
+IXP Watch Documentation           -    Robert Lister <rob@lonap.net>
+
+2003-01-28: Release version 1.5
+2003-04-10: Release version 1.7
+2005-12-30: Release version 1.8
+2012-05-17: Release version 1.9 (Now maintained by rob@lonap.net)
+
+INTRODUCTION & BACKGROUND
+=========================
+
+IXP Watch was originally created by LINX to assist in monitoring the 
+broadcast/flooded traffic on the peering network, which is a layer 
+2 switched network. There are certain types of traffic are 
+considered to be potentially harmful or against our policies.
+
+Each Ethernet port that we provide is connected to a wide variety of
+equipment which is not under the direct control of the IXP, as these 
+devices are owned and managed by member ISPs.
+
+Before IXP Watch, the process of monitoring the traffic on the
+exchange was largely painful, reactive and manual. It was achieved by
+logging in to a server connected to the peering LAN and running tcpdump
+to observe the current broadcast traffic in real-time.
+
+This approach, as well as being time consuming, had several drawbacks:
+
+ - The sheer volume of frames scrolling past became difficult to
+   observe with even the most alert eyes. Which means having to filter
+   out large amounts of traffic types, and missing other things.
+   
+   This means we could only watch for one or two 'types' of problem at 
+   a time, for example a TCP problem, an ARP problem, a non-IP traffic
+   problem... not all at once.
+ 
+ - Recognition of particular faults required manually working
+   through frames, painstakingly looking up IP addresses, MAC
+   addresses, and working out what is happening in a particular event, 
+   if frames are related or unrelated,
+   
+ - When we go to bed, there was nobody watching.
+ 
+ - When we got busy, there was nobody watching.
+ 
+ - History logging was not possible.
+ 
+ - 'one day, we'll automate all this...'
+ 
+ - 'if only we could have spotted that when it started...'
+ 
+ - 'if only we were watching when that happened...'
+
+And so the IXP Watch script was born. (2002!)
+
+Fast forward to 2013, and IXP Watch is still here, still doing its thing.
+Some IXPs liked the idea of IXP Watch, and have since written better tools
+more suited to their environment, which are also capable of reporting in 
+real-time. Some of this is beyond the scope of the original IXP Watch script,
+but in essence, as long as IXPs continue to be big layer 2 blobs, there
+will be some need for IXP Watch-like monitoring.
+
+Also, port security and flood rate limiting features on switches are 
+now mostly working. All these features, where they existed, sucked back 
+in 2003. With the use of port security/MAC lockdown and rate limiting 
+features you can avoid many of the issues before they start, or at
+the very least, detect the problem and prevent the network from melting down.
+
+Reliable loop detection and prevention continues to be a challenge 
+in some networks, even with port security features enabled.
+
+
+FUNCTIONALITY
+=============
+
+IXP Watch is designed to:
+
+ - Be called from a cron task periodically. (We run every 15 minutes)
+
+ - Grab a sample of traffic in to a file (using the "tshark") command
+   line version of "Wireshark", and then do sorting and analysis on the
+   traffic sample. 
+
+ - If there is any 'interesting' traffic that it finds in the sample, it
+   can generate an alert in the form of an e-mail. 
+
+ - ARP Level monitoring - IXP Watch can alert to excessive ARPS and ARP
+   storms on the network
+
+ - It also integrates in to syslog and maintains its own session reports.
+
+ - Option to output stats to a file for graphs/monitoring system integration.
+
+ - You can publish the session reports on your web site if you wish.
+   (we do this by sending an e-mail to the web server. A second script
+    called by the e-mail server then puts the report on the web site.)
+
+ - The actual traffic sample files are also retained for future
+   analysis, providing a complete log of events and history.
+
+
+BENEFITS
+========
+
+
+ - Quicker and improved diagnosis of network problems - IXP Watch 
+   assists engineers in identifying problems faster.
+
+ - Immediate policy enforcement - identify traffic that should not be
+   there, enforce router hygiene, spot the following flooded traffic:
+   
+   - Non-IP Traffic (CDP, Decnet, etc are identified)
+   - Non Unicast IP traffic (OSPF, "ping 255.255.255.255", DHCP)
+   - Corrupted frames
+   - Spanning Tree
+   - Excessive ARPS
+   - Dead BGP sessions
+   - Strange ICMP
+
+Obviously, what is acceptable on one network is unacceptable on another,
+(and vice-versa) and so you will need to edit the ixp-watch script
+to suit your policies. IXP Watch consists of a simple shell
+script, and so it is fairly easy to hack it to suit your requirements
+(adding new things to watch for, or removing things that are present.)
+
+   
+ - History logging - allows log to syslog so that you can identify
+   exactly when 'bad traffic' started occurring.
+
+ - Samples - go back at any given point in to the traffic samples
+   with wireshark (or a tool of your choice that can open the libpcap
+   tcpdump files) Identify individual frames, MAC addresses of bogus
+   IP traffic for assisting vendors/members/customers to identify
+   and resolve problems.
+
+ - You can use IXP Watch in tandem with Arpwatch and other
+   tricks for even better tracking.
+   
+   - With Arpwatch installed and enabled, you will receive an
+     e-mail informing you of a MAC address change, and then maybe
+     IXP Watch sends you an e-mail a few minutes later to alert 
+     you of some non-IP protocol. This would equate to a member changing
+     their router hardware shortly before the non-IP traffic occurred.
+     
+   - A side affect of installing Arpwatch gives you:
+   
+     - 'bogon' logging - logs IP addresses on the LAN that aren't yours.
+     - New station alerting when a new previously unknown MAC address is 
+       seen on the LAN.
+     - MAC address change alerting.
+     - 'flip-flop' alerting - IP addresses that keeps switching back
+       and forth between two MAC addresses. (Mostly caused by two 
+       devices present with same IP address.)
+
+   - "Arp Sponge" - Optionally, a tool to bind IP addresses of members who have 
+      gone away for some time, to the interface of the machine running 
+      IXP Watch. This means that IXP Watch will be able to 
+      log and report BGP peers trying to open a session to it.
+      (BGP tcp packets in SYN state).
+
+      Note: AMS-IX has since developed a much more complete, 
+      fully automated ARP Sponge tool which you should look at: 
+      https://github.com/AMS-IX/arpsponge
+
+
+   - If you add the details of the connections into the
+     /etc/ethers file, this will make it easier to determine the 
+     source of the traffic from the report, rather than looking up 
+     MAC addresses.
+
+     Example /etc/ethers entry might be:
+
+     00:23:eb:48:bf:22       MEMBER_NAME__00:23:eb:48:bf:22
+
+
+DRAWBACKS
+=========
+
+
+ - Its a bash script. I'm not by any means a programmer. 
+   It works for me, but bash scripts can be difficult to debug.
+   
+   The script is known to work on FreeBSD, Linux (debian) and Solaris.
+   (it was originally written for FreeBSD and then 'ported' to Redhat, 
+   as there are a few small but crucial differences between the two.
+   Arnold Nipper at DE-CIX has added Solaris options.
+   
+   If you have any other OS, then you will need to tweak various things
+   so that it works. (I'd be very happy for contributions - versions of this
+   script that work on other OSs. Mostly the output from tshark/libpcap
+   is going to be the same on every OS, but there are slight differences
+   in implementation for example how to get interface and IP information.)
+   
+ - You will have to handle large amounts of files and manage these. I do 
+   this with a cron job that deletes the samples after 1 month and the
+   reports after 12 months, when they are generally no longer interesting.
+
+ - When problems occur, it only has a limited view of the situation and
+   can often only tell you "something bad is happening". But can't
+   give you any more clues as to what. Deploy more probes around the network,
+   and watch carefully for configuration changes and sudden changes 
+   in traffic between switches usually helps shed some more light on problems.
+   
+ - You will need to hack around and do some things before it starts 
+   working in your environment. details are in INSTALL.TXT
+
+ - You will have to handle reverse DNS lookups. Our machine has its 
+   own DNS cache locally to avoid hammering our DNS servers.
+
+ - You can get fed up of the e-mails. Although the script tries to send 
+   only one e-mail per run, if somebody starts dumping a lot of
+   corrupted garbage frames on the network, you will get 4 e-mails an
+   hour, but this is probably good as it is drawing your attention to
+   the problem!
+
+ - Just for old time's sake, I still monitor manually occasionally,
+   but I believe I've got most of the major things in IXP Watch 
+   now. It took several months of watching for things to report on, and 
+   adding lines to the IXP Watch to make it alert me if this 
+   happens again!  - It's good, but it's not 100% foolproof!
+
+

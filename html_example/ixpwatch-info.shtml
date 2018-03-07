@@ -1,0 +1,58 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+
+<!-- #BeginTemplate "template1.dwt" -->
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+	<meta name="language" content="en">
+	<meta name="robots" content="index, follow">
+
+	<!-- #BeginEditable "docmeta" -->
+	<meta name="description" content="LONAP Internet Exchange Point based in London, UK">
+	<meta name="keywords" content="lonap, peering, london, ixp, nap, internet, internet exchange, exchange point, internet exchange point, peering point">
+	<meta name="title" content="LONAP: IXP-Watch">
+	<title>LONAP: IXP-Watch</title>
+	<!-- #EndEditable -->
+
+	<link rel="stylesheet" type="text/css" href="http://www.lonap.net/lonap1.css">
+	
+</head>
+
+<body>
+	<div class="skipnav"><a href="#content">Skip Navigation</a></div>
+	<!-- seb: insert google analytics -->
+
+	<!-- header -->
+	<div class="header"></div>
+	<!-- end header -->
+
+	<!-- navigation -->
+
+<!--#include virtual="/default_navigation.html" -->
+
+	<a name="content"></a>
+	
+	<!-- #BeginEditable "body" -->		
+	<div class="content">
+
+
+		<div class="breadcrumb"><a href="http://www.lonap.net/index.shtml">Home</a> » <a href="http://stats.lonap.net/">Stats</a> » <a href="/ixpwatch">IXP-Watch</a></div>
+
+		<h1>IXP-Watch</h1>
+		<p>Coming here...</p>
+	<!--#include virtual="./foo.html" -->
+
+	<pre>
+	Some interesting stats...
+	</pre>
+	</div>
+	<!-- #EndEditable -->
+
+<!--#include virtual="/default_pagefoot.html" -->
+
+</body>
+
+<!-- #EndTemplate -->
+
+</html>
