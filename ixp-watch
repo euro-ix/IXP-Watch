@@ -36,7 +36,7 @@ LOGHOST=                  # optional syslog host to send alerts to
 LOG_FACILITY=local4.debug # Facility to send logs to
                           # leave both blank to not log anywhere.
 
-ARP_WARNLEVEL=3000        # Alert when number of ARPS Per Minute reaches this.
+ARP_WARNLEVEL=4000        # Alert when number of ARPS Per Minute reaches this.
                           # You may not know this now, but you can use the reports
                           # to work out what is a reasonable level.
 
