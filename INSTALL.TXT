@@ -287,6 +287,11 @@ local4.debug                                     @loghost.your.net
 
     Creating the VLAN on the network is not required. We use VLAN ID 4096.
 
+    Supporting cron jobs for IXP Manager updates:
+
+     - `*/5 * * * *         root        /usr/local/bin/auto_sponge update`
+     - `10 */3 * * *        root        /usr/local/bin/update_ethers.sh`
+
 
 Right. I think that's about it. :-)
 

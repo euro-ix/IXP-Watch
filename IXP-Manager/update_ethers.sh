@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # <rob@lonap.net> - 2020-08-24
-# Script to update /etc/ethers with LONAP member details to make
+# Script to update /etc/ethers with member details to make
 # IXP-Watch reports and tcpdump more useful.
 
 DESTFILE=/etc/ethers

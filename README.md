@@ -44,8 +44,9 @@ sponge tool included. See the directory ./IXP-Manager for example scripts.
 - Optional arpwatch tool:   apt-get install arpwatch
 - Install `./bin/ixp-watch-lonap` into `/usr/local/bin`
 - Install `./bin/ixp-watch-tidy` into `/usr/local/bin`
-- Install `./bin/update_ethers.sh` into `/usr/local/bin`
-- Install `./bin/sponge`  or `./IXP-Manager/auto_sponge` into  `/usr/local/bin`
+- Install `./bin/sponge` (manual sponge tool)
+-  - or `./IXP-Manager/auto_sponge` into  `/usr/local/bin` (If using IXP Manager auto sponge)
+- Install `./IXP-Manager/update_ethers.sh` into `/usr/local/bin` (If using IXP Manager)
 - Make sure all these scripts have execute bit set.
 - Run `dpkg-reconfigure wireshark-common` and select **Yes** to the question asking if non-root users should be permitted.
 - Create a user called `ixpwatch`. Add it to group `wireshark` (create this group if it doesn't exist)
@@ -65,5 +66,3 @@ sponge tool included. See the directory ./IXP-Manager for example scripts.
   - If using the auto_sponge tool for automating sponges from IXP Manager:
      - `*/5 * * * *         root        /usr/local/bin/auto_sponge update`
      - `10 */3 * * *        root        /usr/local/bin/update_ethers.sh`
-
-
