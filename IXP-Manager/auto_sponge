@@ -1,0 +1,362 @@
+#!/bin/bash
+# This file is part of IXP Watch
+#
+# IXP Watch is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, version v2.0 of the License.
+#
+# IXP Watch is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+# for more details.
+#
+# You should have received a copy of the GNU General Public License v2.0
+# along with IXP Watch If not, see:
+#
+# http://www.gnu.org/licenses/gpl-2.0.html
+#
+# Manage ARP sponges from IXP Manager vlan "Sponged"
+# <rob@lonap.net> 2020-08-22
+# Loads sponge list from json from json_arpsponges
+#
+# This tool replaces the manual "sponge" tool and is designed to be
+# called from cron using "auto_sponge update"
+# Which will pull a list of sponges from IXP Manager (IPs in the VLAN "Sponged")
+# which are assigned to an old member (they can be found by searching for the IP
+# or listing all IPs the Sponged VLAN within IXP Manager.)
+# It requires the "json_arpsponges" cgi running on the IXP Manager server 
+# to work.
+#
+# !!! IMPORTANT: auto_sponge assumes that ALL secondary IP addresses configured
+# on the interface are for ARP sponge use and that the interface is dedicated
+# for ixp-watch/sponges. A dedicated VM or interface is recommended,
+# as any secondary ip addresses configured for unrelated applications
+# will be removed. The primary IP address configured from boot is not touched.
+#
+# Note that this is tested on Linux/Debian but not other operating systems.
+# You will need to check the various paths and command output, or replace
+# with equivalents for alternative OS.
+#
+# !! Depends: apt-get install jq sipscalc wget
+#
+# For this to work, you will need to create a vlan called "Sponged" in IXP Manager
+# and then move all IP addresses to be sponged into this VLAN.
+# 
+# IXP Manager does not show port details for members who have left, however, 
+# sponged IP addresses can be found using the search function, or listing the
+# IP addresses in the VLAN.
+#
+#
+
+# ----------------------------------------------------------------------
+# CONFIG VARS
+# ----------------------------------------------------------------------
+
+MY_NET="5.57.80.0"    # network base address
+MASK="22"             # network CIDR mask
+INTERFACE="eth1"      # interface to bind IPs to
+# INTERFACE=`/usr/bin/netstat -arn | grep -w ^${MY_NET} | awk '{print $8}'`
+
+JQ="/usr/bin/jq"           # Where is jq (for JSON)
+COMM="/usr/bin/comm"       # comm cmd
+WGET="/usr/bin/wget"       # Where is wget/curl
+WGET_OPTS="-qO -"          # wget opts to get to stdout
+SIPCALC="/usr/bin/sipcalc" # sipcalc
+IP="/sbin/ip"              # ip cmd
+NETSTAT=`which netstat`    # netstat cmd
+
+# Where to get sponge list: 
+URL="https://<your_ixpmanager_server>/cgi-bin/json_arpsponges"
+
+ARPSPONGES="/tmp/arpsponges.$$"
+ARPDIFF="/tmp/arpsponge.$$"
+
+SHOW_OUTPUT=1         # Show normal output (configure what to do in do_msg)
+                      # If set to 0, only errors will be output.        
+# ----------------------------------------------------------------------
+
+# What to do with error messages:
+do_error () {
+         echo "$@" 1>&2;
+         #  echo "$@" | /some/script/process_errors
+         if [ -f "${ARPDIFF}" ]    ; then rm ${ARPDIFF}    ;  fi
+         if [ -f "${ARPSPONGES}" ] ; then rm ${ARPSPONGES} ;  fi
+ }
+
+# Normal output messages:
+do_msg () {
+         [ $SHOW_OUTPUT = 1 ] &&  echo "$@";
+         # [ $SHOW_OUTPUT = 1 ] && echo "$@" | /some/script/process_messages
+         return 0
+ }
+
+# Non-fatal error messages or from functions:
+do_suberror () {
+         echo "$@" 1>&2;
+}
+
+# trap ctrl-c and call ctrl_c()
+trap ctrl_c INT
+
+function ctrl_c() {
+        do_error "** Trapped CTRL-C"
+        exit 1
+}
+
+if [ ! -x "$JQ" ]      ; then do_error "ERROR: cannot run $JQ"      ; exit 1 ; fi
+if [ ! -x "$WGET" ]    ; then do_error "ERROR: cannot run $WGET"    ; exit 1 ; fi
+if [ ! -x "$COMM" ]    ; then do_error "ERROR: cannot run $COMM"    ; exit 1 ; fi
+if [ ! -x "$NETSTAT" ] ; then do_error "ERROR: cannot run $NETSTAT" ; exit 1 ; fi
+if [ ! -x "$SIPCALC" ] ; then do_suberror "WARNING: sipcalc not found! No subnet check will be performed!" ; fi
+
+# Get and return something from server:
+get_json () {
+  local ret=0
+  GET=$1
+  REQUEST=`${WGET} ${WGET_OPTS} ${URL}${GET}`
+  ret=$?
+  if [ $? != 0 ] ; then do_error "ERROR: failed to get JSON: ${WGET} ${WGET_OPTS} ${URL}${GET}"; ret=1; fi
+  echo "${REQUEST}"
+  return $ret
+}
+
+# get list of ARP Sponges from IXP Manager:
+get_spongelist () {
+   local ret=0;
+   local json=$( get_json ?vlan=Sponged )
+   local spongelist=`echo "$json" | ${JQ} -r '.arpsponges[].ipv4address' | sort -t . -k 3,3n -k 4,4n`
+   ret=$?
+
+   if [ ${#spongelist} = 0 ] ; then do_error "ERROR: spongelist is empty." ; ret=1; fi
+
+   echo "$spongelist"
+   return $ret
+}
+
+# get list of secondary IPs applied to interface
+get_boundlist () {
+   local ret=0;
+   local boundlist=`${IP} addr show dev ${INTERFACE} to ${MY_NET}/${MASK} scope global secondary | grep inet | awk '{print $2}' | cut -d/ -f1 | sort -t . -k 3,3n -k 4,4n`
+   ret=$?
+
+   echo "$boundlist"
+   return $ret
+}
+
+# Bind an IP address if checks pass:
+do_ip_add () {
+   local ret=0;
+   local address=$1
+
+   #echo "add ip $address"
+
+   # If IP is in CIDR notation, delete the "/xx" mask:
+   O_ADDR=`echo $address | cut -d/ -f1`
+
+   # Check IP is in our configured subnet:
+     if [ -x "${SIPCALC}" ] ; then
+       IS_IN_NET=`${SIPCALC} $O_ADDR/$MASK | grep "^Network address" | awk -F"- " '{print $2}'`
+       if [ ! "$IS_IN_NET" = "$MY_NET" ] ; then
+           do_suberror "Bad address: $O_ADDR for interface $interface: $MY_NET/$mask, Address $O_ADDR wrong mask or subnet: $MY_NET/$MASK"
+           ret=1
+       fi
+     fi
+
+   # Check if address is already bound:
+   IS_ALREADY_SPONGED=`${IP} addr show dev ${INTERFACE} to ${MY_NET}/${MASK} scope global secondary | grep inet | grep -cw "$O_ADDR"`
+    if [ "$IS_ALREADY_SPONGED" = "1" ] ; then
+     do_suberror "do_ip_add: $O_ADDR is already bound to interface ${INTERFACE}. No action taken."
+     ret=1
+     return $ret
+    fi
+
+   # Check address is not live before adding:
+
+   ping -c 3 -i 0.2 -W 1 $O_ADDR > /dev/null
+   PINGRESULT="$?"
+
+   if [ "$PINGRESULT" = "0" ] ; then
+    do_suberror "FAILED to add ARP Sponge: the address $O_ADDR is still alive!"
+    ret=1
+    return $ret
+   fi
+
+   if [ "$PINGRESULT" = "1" ] ; then
+    OK=1
+   else
+    do_suberror "FAILED - PING failed for some reason!"
+    return $PINGRESULT
+   fi
+
+  ${IP} addr add $O_ADDR/$MASK dev $INTERFACE
+  ADDRESULT="$?"
+
+  if [ "$ADDRESULT" = "0" ] ; then
+   do_msg "Sponged IP ${O_ADDR} added to interface ${INTERFACE}"
+  else
+   do_error "FAILED - IP addr add command failed for some reason: ${IP} addr add $O_ADDR/$MASK dev $INTERFACE"
+   return $ADDRESULT
+  fi
+
+  return $ret
+
+}
+
+do_ip_del () {
+  local address=$1
+  local ret=0;
+
+  # If IP is in CIDR notation, delete the "/xx" mask:
+  O_ADDR=`echo $address | cut -d/ -f1`
+
+   # Check if address is already bound:
+   IS_ALREADY_SPONGED=`${IP} addr show dev ${INTERFACE} to ${MY_NET}/${MASK} scope global secondary | grep inet | grep -cw "$O_ADDR"`
+    if [ ! "$IS_ALREADY_SPONGED" = "1" ] ; then
+     do_suberror "do_ip_del: $O_ADDR is not bound to interface ${INTERFACE}. No action taken."
+     ret=1
+     return $ret
+    fi
+
+   ${IP} addr del $O_ADDR/$MASK dev $INTERFACE
+   DELRESULT="$?"
+
+  if [ "$DELRESULT" = "0" ] ; then
+   do_msg "Sponged IP ${O_ADDR} removed from interface ${INTERFACE}"
+  else
+   do_error "FAILED - IP addr del command failed for some reason!"
+   ret=1
+   return $ret
+  fi
+
+ return $ret
+
+}
+
+ACTION=`echo "$1" | sed s/\^-//g | tr [A-Z] [a-z]`
+
+# Check interface:
+INT_CHECK=`${NETSTAT} -arn | grep -w ^${MY_NET} | grep -wc ${INTERFACE} || INT_CHECK=0`
+
+if [ "$INT_CHECK" = "0" ] ; then
+   do_error "ERROR: interface ${INTERFACE} is down, not found or not configured for network ${MY_NET}"
+   exit 1
+fi
+
+#######################################################################
+
+if [  "$ACTION" = "update" ] ; then
+
+  # get list of secondary IPs currently bound to interface:
+  BOUNDLIST=$(get_boundlist)
+  if [ $? != 0 ] ; then do_error "ERROR: failed to get BOUNDLIST"; exit 1; fi
+  echo "$BOUNDLIST" > ${ARPSPONGES}
+
+  if [ ! -f "$ARPSPONGES" ] ; then
+    do_error "$ARPSPONGES could not be created"
+    exit 1
+  fi
+
+  # get list of sponges IPs from IXP Manager:
+  SPONGELIST=$(get_spongelist)
+  if [ $? != 0 ] ; then do_error "ERROR: failed to get SPONGELIST"; exit 1; fi
+  echo "${SPONGELIST}" > ${ARPDIFF}
+
+    # Delete any IPs which are bound (in ARPSPONGES but not in ARPDIFF):
+    for line in $( ${COMM} --nocheck-order -23 ${ARPSPONGES} ${ARPDIFF} ); do
+      do_ip_del "${line}"
+    done
+
+    # Add any IPs which are in ARPDIFF but not bound. (in ARPDIFF but not ARPSPONGES)
+    for line in $( ${COMM} --nocheck-order -13 ${ARPSPONGES} ${ARPDIFF} ) ; do
+      do_ip_add "${line}"
+    done
+
+fi
+
+#######################################################################
+
+if [ "$ACTION" = "stop" ] ; then
+
+${IP} addr show dev ${INTERFACE} to ${MY_NET}/${MASK} scope global secondary | grep inet | awk '{print $2}' | \
+	 awk -v interface="$INTERFACE" -v ip="$IP" '{print ip " addr del "$1" dev "interface}' | sh
+
+fi # end of stop bit
+
+#######################################################################
+
+if [ "$ACTION" = "start" ] ; then
+
+$0 stop
+
+  if [ -f "${ARPSPONGES}" ] ; then
+     rm ${ARPSPONGES}
+   fi
+
+# run update again to pull in new arpsponges:
+$0 update
+
+fi # end of start bit
+#
+#######################################################################
+
+if [ "$ACTION" = "" ] ; then
+echo ""
+echo "Usage:"
+echo "auto_sponge update - update from ixp manager"
+echo "auto_sponge start - delete and re-apply all from file"
+echo "auto_sponge stop  - delete all sponged addresses from interface"
+echo "auto_sponge list  - list status of all sponges."
+echo ""
+echo "NOTE: Sponged IP addresses are not intended to be added manually."
+echo "      ARP sponges are added and removed from within IXP Manager!"
+echo ""
+
+ACTION=list
+
+fi
+
+if [ "$ACTION" = "list" ] ; then
+
+RED=$'\e[1;31m'
+GREEN=$'\e[1;32m'
+UNSET=$'\e[0m'
+
+  echo "$GREEN:::: Applied arp sponges on interface $INTERFACE:"
+
+  # get list of secondary IPs currently bound to interface:
+  BOUNDLIST=$(get_boundlist)
+  if [ $? != 0 ] ; then do_error "ERROR: failed to get BOUNDLIST"; exit 1; fi
+  echo "${BOUNDLIST}" > ${ARPSPONGES}
+
+  # get a more detailed list for human readable output:
+  json=$( get_json ?vlan=Sponged )
+  SPONGELIST=`echo "$json" | ${JQ} -r '.arpsponges[] | [.ipv4address, "# AS" + (.autsys|tostring),.abbreviatedName,.dateleave] | @tsv' | sort -t . -k 3,3n -k 4,4n`
+  if [ $? != 0 ] ; then do_error "ERROR: failed to get SPONGELIST"; exit 1; fi
+  echo "${SPONGELIST}" > ${ARPDIFF}
+
+  join --nocheck-order ${ARPSPONGES} ${ARPDIFF}
+
+  # check for listed but not bound:
+  LISTED_BUT_NOT_BOUND=`cat ${ARPDIFF} | cut -f1 | ${COMM} -13 --nocheck-order ${ARPSPONGES} -`
+  if [ ! ${#LISTED_BUT_NOT_BOUND} = 0 ] ; then
+  echo "$RED:::: WARNING: The following IPs are listed as sponged but are NOT bound to $INTERFACE:"
+  cat ${ARPDIFF} | cut -f1 | ${COMM} -13 --nocheck-order ${ARPSPONGES} - | xargs -I '{}' grep -w "^{}" ${ARPDIFF}
+  fi
+
+  # check for bound but not listed:
+  BOUND_BUT_NOT_LISTED=`cat ${ARPDIFF} | cut -f1 | ${COMM} -23 --nocheck-order ${ARPSPONGES} -`
+  if [ ! ${#BOUND_BUT_NOT_LISTED} = 0 ] ; then
+  echo "$RED:::: WARNING: The following IPs are bound to $INTERFACE but NOT listed as sponged:"
+  cat ${ARPDIFF} | cut -f1 | ${COMM} -23 --nocheck-order ${ARPSPONGES} -
+  fi
+
+echo $UNSET
+
+fi
+
+#######################################################################
+
+# Clean up temp files:
+if [ -f "${ARPDIFF}" ]    ; then rm ${ARPDIFF}    ;  fi
+if [ -f "${ARPSPONGES}" ] ; then rm ${ARPSPONGES} ;  fi
+

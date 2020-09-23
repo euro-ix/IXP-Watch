@@ -1,0 +1,84 @@
+#!/usr/bin/perl
+use strict;
+# use CGI;   # apt-get install libcgi-pm-perl
+use DBI;   # apt-get install libdbi-perl
+use JSON;  # apt-get install libjson-perl
+
+#
+# <rob@lonap.net> 2020-08-22
+# Script to generate JSON data for ARP Sponged IP addresses.
+# This cgi-bin will need to be installed on your IXP Manager web server.
+
+# Example jq to turn the output into tsv for arp sponge, sorting by IP address:
+# wget -qO - https://portal.lonap.net/cgi-bin/json_arpsponges | jq -r '.arpsponges[] | [.ipv4address, "# AS" + (.autsys|tostring),.abbreviatedName,.dateleave] | @tsv' | sort -t . -k 3,3n -k 4,4n
+
+# HTTP HEADER 
+print "Content-type: application/json; charset=iso-8859-1\n\n";
+
+#------------------------------------------------------------------------------
+# CONFIG VARS:
+
+my $MYSQL_DATABASE           = "ixpmanager";
+my $MYSQL_SERVER             = "localhost";   # or your mysql server
+my $MYSQL_USER               = "YOUR_MYSQL_USERNAME";
+my $MYSQL_PASS               = "YOUR_MYSQL_PASSWORD";
+my $MYSQL_DATA_SOURCE        = "dbi:mysql:$MYSQL_DATABASE:$MYSQL_SERVER";
+
+#------------------------------------------------------------------------------
+
+my $dbh   = DBI->connect($MYSQL_DATA_SOURCE, $MYSQL_USER, $MYSQL_PASS, {
+             RaiseError       => 1,
+             PrintError       => 1,
+             # AutoCommit     => 0,
+             }) or die "Can't connect to mysql db $MYSQL_DATABASE / $MYSQL_SERVER : $DBI::errstr";
+
+$dbh->do("set character set utf8");
+$dbh->do("set names utf8");
+
+my ($vlan, $p, $sth, @query_output); 
+
+#$p = new CGI;
+#my $vlan = $p->param('vlan');
+
+$vlan = "Sponged" unless ($vlan);
+
+my $sth = $dbh->prepare("SELECT cust.abbreviatedName, cust.autsys, ipv4address.address AS ipv4address, cust.dateleave,
+                         cust.status, ipv4address.id AS ipv4addresid 
+                         FROM vlaninterface
+                         INNER JOIN ipv4address ON vlaninterface.ipv4addressid = ipv4address.id
+                         INNER JOIN virtualinterface ON vlaninterface.virtualinterfaceid = virtualinterface.id
+                         INNER JOIN cust ON virtualinterface.custid = cust.id
+                         INNER JOIN vlan ON vlaninterface.vlanid = vlan.id AND
+                         ipv4address.vlanid = vlan.id
+                         WHERE
+                         vlan.name = ?");
+
+$sth->execute("$vlan");
+
+# LOOP THROUGH RESULTS
+while ( my $row = $sth->fetchrow_hashref ){
+
+  $row->{autsys}        = int($row->{autsys});
+  $row->{status}        = int($row->{status});
+  $row->{ipv4addresid}  = int($row->{ipv4addresid});
+
+  push @query_output, $row;
+
+}
+
+# CLOSE DATABASE CONNECTION
+
+$dbh->disconnect();
+
+# JSON OUTPUT
+#print JSON::to_json(\@query_output);
+
+# Pretty (human readable) output:
+# Note that canonical sorts the JSON output keys in alphabetical order,
+# since the perl hashes are unsorted. If converting this JSON into other
+# formats e.g. CSV, care must be taken to select the wanted fields
+# by name, and not rely on them being in a particular order or position.
+print "{\n";
+print "\"arpsponges\": ";
+print JSON->new->canonical(1)->ascii->pretty->encode(\@query_output);
+print "}\n";

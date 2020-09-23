@@ -1,0 +1,154 @@
+#!/usr/bin/perl
+use strict;
+use CGI;   # apt-get install libcgi-pm-perl
+use DBI;   # apt-get install libdbi-perl
+use JSON;  # apt-get install libjson-perl
+
+# <rob@lonap.net> 2020-08-22
+# Generate data suitable for /etc/ethers file from IXP Manager:
+#
+# This produces JSON output from both the configured mac addresses (l2address)
+# and any addresses learned automatically (macaddress)
+#
+# If the mac is in the Configured addresses table (l2address) then configured
+# is set to 1. If the mac is only in the Discovered addresses table (macaddress)
+# then configured is set to 0.
+#
+#
+# Example to get into /etc/ethers format:
+# wget -qO - https://portal.lonap.net/cgi-bin/json_ethers?vlanid=1 | jq -r '.ethers[] | [.mac,.ethersdesc] | @tsv'
+
+# HTTP HEADER 
+print "Content-type: application/json; charset=iso-8859-1\n\n";
+
+#------------------------------------------------------------------------------
+# CONFIG VARS:
+
+my $MYSQL_DATABASE           = "ixpmanager";
+my $MYSQL_SERVER             = "localhost";   # or your mysql server
+my $MYSQL_USER               = "YOUR_MYSQL_USERNAME";
+my $MYSQL_PASS               = "YOUR_MYSQL_PASSWORD";
+my $MYSQL_DATA_SOURCE        = "dbi:mysql:$MYSQL_DATABASE:$MYSQL_SERVER";
+
+#------------------------------------------------------------------------------
+
+my $dbh   = DBI->connect($MYSQL_DATA_SOURCE, $MYSQL_USER, $MYSQL_PASS, {
+             RaiseError       => 1,
+             PrintError       => 1,
+             # AutoCommit     => 0,
+             }) or die "Can't connect to mysql db $MYSQL_DATABASE / $MYSQL_SERVER : $DBI::errstr";
+
+$dbh->do("set character set utf8");
+$dbh->do("set names utf8");
+
+# l2address = configured MAC addresses for member
+# macaddress = auto learned MAC addresses
+
+my %MACS;
+
+my ($vlan, $p, $sth, @query_output); 
+
+$p = new CGI;
+my $vlanid = $p->param('vlanid');
+$vlanid = "1" unless ($vlanid);
+
+# Query configured addresses:
+
+my $sth = $dbh->prepare("SELECT
+                         l2address.mac,
+                         cust.abbreviatedName,
+                         virtualinterface.id AS virtualinterfaceid
+			FROM
+    			 l2address
+                         INNER JOIN vlaninterface ON l2address.vlan_interface_id = vlaninterface.id
+    			 INNER JOIN virtualinterface ON vlaninterface.virtualinterfaceid = virtualinterface.id
+    			 INNER JOIN cust ON virtualinterface.custid = cust.id
+		       WHERE
+                         vlaninterface.vlanid = ?
+                         ");
+
+$sth->execute($vlanid);
+
+# LOOP THROUGH RESULTS
+while ( my $row = $sth->fetchrow_hashref ){
+
+  $MACS{$row->{mac}}=1;
+  # turn mac into "xx:xx:xx:xx:xx:xx"
+  $row->{mac} =~ s/..\K(?=.)/:/sg;
+  $row->{ethersdesc} = format_desc($row->{abbreviatedName},$row->{mac});
+  $row->{configured} = 1;
+  $row->{virtualinterfaceid} = int($row->{virtualinterfaceid});
+
+  push @query_output, $row;
+}
+
+# Query discovered addresses:
+# Get from macaddress table (discovered) and add if they're not already in l2address,
+# set configured = 0.
+
+my $sth = $dbh->prepare(" SELECT 
+			  macaddress.mac,
+    			  cust.abbreviatedName,
+                          macaddress.virtualinterfaceid AS virtualinterfaceid
+			  FROM
+    		          macaddress
+    			  INNER JOIN virtualinterface ON macaddress.virtualinterfaceid = virtualinterface.id
+    			  INNER JOIN vlaninterface ON vlaninterface.virtualinterfaceid = virtualinterface.id
+    			  INNER JOIN cust ON virtualinterface.custid = cust.id
+			  WHERE
+    			   vlaninterface.vlanid = ?
+                         ");
+
+$sth->execute($vlanid);
+
+# LOOP THROUGH RESULTS
+while ( my $row = $sth->fetchrow_hashref ){
+
+  next if ($MACS{$row->{mac}});
+  $MACS{$row->{mac}}=1;
+
+  # turn mac into "xx:xx:xx:xx:xx:xx"
+  $row->{mac} =~ s/..\K(?=.)/:/sg;
+  $row->{ethersdesc} = format_desc($row->{abbreviatedName},$row->{mac});
+  $row->{configured} = 0;
+  $row->{virtualinterfaceid} = int($row->{virtualinterfaceid});
+
+  push @query_output, $row;
+}
+
+
+# CLOSE DATABASE CONNECTION
+
+$dbh->disconnect();
+
+# JSON OUTPUT
+#print JSON::to_json(\@query_output);
+
+# Pretty (human readable) output:
+# Note that canonical sorts the JSON output keys in alphabetical order,
+# since the perl hashes are unsorted. If converting this JSON into other
+# formats e.g. CSV, care must be taken to select the wanted fields
+# by name, and not rely on them being in a particular order or position.
+print "{\n";
+print "\"ethers\": ";
+print JSON->new->canonical(1)->ascii->pretty->encode(\@query_output);
+print "}\n";
+
+
+sub format_desc {
+
+	my ($name,$mac) = @_;
+	my $ethersdesc;
+
+	# format description for /etc/ethers.
+	$ethersdesc = uc($name);
+	$ethersdesc =~ s/[\ \.]/_/g;
+	$ethersdesc =~ s/[^a-zA-Z0-9_]//g;
+	$ethersdesc =~ s/__/_/g;
+	$ethersdesc =~ s/^_|_+$//g;
+	$ethersdesc = "${ethersdesc}__${mac}";
+
+	return ("$ethersdesc");
+
+}
+
