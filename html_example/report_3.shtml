@@ -15,13 +15,13 @@
 	<title>LONAP: IXP-Watch</title>
 	<!-- #EndEditable -->
 
-	<link rel="stylesheet" type="text/css" href="http://stats.lonap.net/lonap1.css">
+	<link rel="stylesheet" type="text/css" href="lonap1.css">
 	
 </head>
 
 <body>
 	<!-- header -->
-	<div class="header"></div>
+    <!-- <div class="header"></div> -->
 	<!-- end header -->
 
 	<!-- navigation -->
@@ -31,7 +31,7 @@
 	<!-- #BeginEditable "body" -->		
 	<div class="content">
 
-		<div class="breadcrumb"><a href="http://www.lonap.net/index.shtml">Home</a> » <a href="http://stats.lonap.net/">Stats</a> » <a href="/ixpwatch">IXP-Watch</a></div>
+		<div class="breadcrumb"><a href="http://www.lonap.net/index.shtml">Home</a> » <a href="">Stats</a> » <a href="/ixpwatch">IXP-Watch</a></div>
 
                 <h2>Current Reports</h2>
 
@@ -42,6 +42,8 @@
 
 	<!-- #EndEditable -->
 	</div>
+
+<!--#include virtual="./default_pagefoot.html" -->	
 
 </body>
 

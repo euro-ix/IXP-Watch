@@ -37,7 +37,7 @@
 	<div class="content">
 
 
-		<div class="breadcrumb"><a href="http://www.lonap.net/index.shtml">Home</a> » <a href="http://stats.lonap.net/">Stats</a> » <a href="/ixpwatch">IXP-Watch</a></div>
+		<div class="breadcrumb"><a href="http://www.lonap.net/index.shtml">Home</a> » <a href="#">Stats</a> » <a href="/ixpwatch">IXP-Watch</a></div>
 
 		<h1>IXP-Watch</h1>
 		<p>Coming here...</p>
@@ -49,7 +49,7 @@
 	</div>
 	<!-- #EndEditable -->
 
-<!--#include virtual="/default_pagefoot.html" -->
+<!--#include virtual="./default_pagefoot.html" -->
 
 </body>
 

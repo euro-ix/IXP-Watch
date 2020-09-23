@@ -5,7 +5,7 @@
 
 /* use navigation1.css for full menu / nav2 for simplified */
 
-@import url("navigation3.css");
+/* @import url("navigation3.css"); */
 
 /* General Styles */
 
@@ -151,7 +151,7 @@ blockquote div {
 /* Specific Styles */
 
 div.header {
-	width: 780px;
+	width: 1360px;
 /*
 	background-image: url('images/lonap-website-banner4b.png');
 	background-image: url('images/lonaptrial6a.png');
@@ -175,7 +175,7 @@ div.content {
 	padding-right: 10px;
 	padding-bottom: 15px;
 	margin-bottom: 2px;
-	width: 760px; /* width inherited less padding left+right */
+	width: 1360px; /* width inherited less padding left+right */
 	float: left;
 	clear: both;
 /*	float: left; /* without this ff screws up vertically on front page.. with it ie floats the bottom nav to the right when ultra wide screen */
