@@ -1,20 +1,4 @@
 #!/bin/bash
-
-# 2003-02-22 00:48 <robl@linx.net>
-# Script to manage 'arp sponges' without too much hassle.
-#
-# 2003-08-12 - Added path to "ip" because Redhat doesn't put
-# /sbin in user paths by default.
-#
-# 2012-05-17 - <rob@lonap.net> Note there are better things than
-# This available now for controlling ARP. But as this works
-# nicely with ixp-watch reports, it is left here as-is.
-# (Works with linux. Untested on other platforms.)
-
-# Copyright 2003 - 2012 London Internet Exchange Ltd ('LINX')
-# Copyright 2012 - Robert Lister <rob@lonap.net>
-# See the file LICENSE for further details.
-#
 # This file is part of IXP Watch
 #
 # IXP Watch is free software: you can redistribute it and/or modify it
@@ -30,13 +14,42 @@
 # along with IXP Watch If not, see:
 #
 # http://www.gnu.org/licenses/gpl-2.0.html
+# 2003-02-22 00:48 <robl@linx.net>
+# Script to manage 'arp sponges' without too much hassle.
+#
+# 2003-08-12 - Added path to "ip" because Redhat doesn't put
+# /sbin in user paths by default.
+
+#
+# 2012-05-17 - <rob@lonap.net> Note there are better things than
+# This available now for controlling ARP. But as this works
+# nicely with ixp-watch reports, it is left here as-is.
+# (Works with linux. Untested on other platforms.)
+#
+# 2020-08-22: - <rob@lonap.net> Use sipcalc if available for subnet checking.
+# - Roll in some LONAP changes and improvements.
+# - Timestamp and decimal for /etc/arpsponges to allow easier sorting and history
+#   (this requires a change to /etc/arpsponges to work: it's now:
+#       <ip_decimal> <date_added> <ip address>
+#   e.g 87642128 2019-11-18 5.57.80.16
+
+# Copyright 2003 - 2012 London Internet Exchange Ltd ('LINX')
+# Copyright 2012 - Robert Lister <rob@lonap.net>
+# See the file LICENSE for further details.
 
 
 ### NOTE: requires the user be able to run the "ip" command
 
-INTERFACE="eth0"
-MASK="24"
-SANITY_CHECK="193.203.5." # lock to only allow these addresses to be added.
+MY_NET="5.57.80.0"  # network base address
+MASK="22"           # network CIDR mask
+INTERFACE="eth1"    # interface to bind IPs to
+
+SANITY_CHECK="5.57.8" # lock to only allow these addresses to be added.
+IP_DECIMAL="4294967295"
+
+if [ ! -f /usr/bin/sipcalc ] ; then
+	echo "WARNING: sipcalc not found! No subnet check will be performed!"
+fi
 
 if [ ! -f /etc/arpsponges ] ; then
  echo "Error: /etc/arpsponges could not be found"
@@ -47,13 +60,32 @@ ACTION=`echo "$1" | sed s/\^-//g | tr [A-Z] [a-z]`
 
 if [ "$ACTION" = "add" ] ; then
 
-echo ""
-printf "Checking address $2..."
+# if the user gave address in CIDR notation, delete the "/xx" mask:
+O_ADDR=`echo $2 | cut -d/ -f1`
 
- IS_GOOD_ADDR=`echo "$2" | grep -c "$SANITY_CHECK"`
+echo ""
+printf "Checking address $O_ADDR..."
+
+if [ -f /usr/bin/sipcalc ] ; then
+
+   IS_IN_NET=`/usr/bin/sipcalc $O_ADDR/$MASK | grep "^Network address" | awk -F"- " '{print $2}'`
+
+   if [ ! "$IS_IN_NET" = "$MY_NET" ] ; then
+           printf "\b... *** FAILED! *** \n"
+           echo "Bad address: $O_ADDR for interface $INTERFACE: $MY_NET/$MASK"
+           echo "Address $O_ADDR wrong mask or subnet: $MY_NET/$MASK"
+           echo ""
+           exit 1
+   fi
+
+   IP_DECIMAL=`/usr/bin/sipcalc $O_ADDR | grep "(decimal)" | cut -f2 -d'-' | sed s/\ //g`
+
+fi
+
+ IS_GOOD_ADDR=`echo "$O_ADDR" | grep -c "$SANITY_CHECK"`
  if [ ! "$IS_GOOD_ADDR" = "1" ] ; then
   printf "\b... *** FAILED! *** \n"
-  echo "Bad address: $2 for interface $INTERFACE/$SANITY_CHECK"
+  echo "Bad address: $O_ADDR for interface $INTERFACE: $MY_NET/$MASK"
   echo "Are you adding the sponge to the right server?"
   echo ""
   exit 1
@@ -61,10 +93,10 @@ printf "Checking address $2..."
 
  if [ ! "$3" = "-APPLY" ] ; then
 
- IS_ALREADY_SPONGED=`grep -c -w "^$2" /etc/arpsponges`
+ IS_ALREADY_SPONGED=`grep -c -w "^$O_ADDR" /etc/arpsponges`
    if [ ! "$IS_ALREADY_SPONGED" = "0" ] ; then
     printf "\b... *** FAILED! *** \n"
-    echo "- $2 is ALREADY in /etc/arpsponges."
+    echo "- $O_ADDR is ALREADY in /etc/arpsponges."
     echo "- use \"sponge apply\" to refresh the interface if needed."
     exit 1
    fi
@@ -72,15 +104,17 @@ printf "Checking address $2..."
 
 printf "...OK ($INTERFACE mask $MASK)\n"
 
+ISODATE=`date +%Y-%m-%d`
+
 printf "Checking address is not live before adding..."
 
-ping -c 3 $2 > /dev/null
+ping -c 3 $O_ADDR > /dev/null
 
 PINGRESULT="$?"
 
 if [ "$PINGRESULT" = "0" ] ; then
- printf "\b... *** FAILED! ***\n - the address $2 is still alive!\n"
- arp -a $2
+ printf "\b... *** FAILED! ***\n - the address $O_ADDR is still alive!\n"
+ arp -a $O_ADDR
  echo ""
  exit 1
 fi
@@ -92,9 +126,9 @@ else
  exit 1
 fi
 
-printf "Adding $2 to interface $INTERFACE..."
+printf "Adding $O_ADDR to interface $INTERFACE..."
 
-/sbin/ip addr add $2/$MASK dev $INTERFACE
+/sbin/ip addr add $O_ADDR/$MASK dev $INTERFACE
 
 ADDRESULT="$?"
 
@@ -104,8 +138,7 @@ if [ "$ADDRESULT" = "0" ] ; then
   if [ ! "$3" = "-APPLY" ] ; then
    /sbin/ip addr list dev $INTERFACE
    echo ""
-   echo "- remember to add a comment to ip-alloc.txt file!"
-   echo "$2">>/etc/arpsponges
+   echo "$IP_DECIMAL $ISODATE $O_ADDR">>/etc/arpsponges
   fi
 
 else
@@ -128,7 +161,7 @@ if [ "$ACTION" = "apply" ] ; then
 
  printf "Adding addresses from /etc/arpsponges:\n\n"
 
- awk -v exec="$0" '{print exec" add "$1" -APPLY"}' /etc/arpsponges | sh
+ awk -v exec="$0" '{print exec" add "$3" -APPLY"}' /etc/arpsponges | sh
  /sbin/ip addr list dev $INTERFACE
 
 fi # end of apply bit
@@ -139,34 +172,26 @@ if [ "$ACTION" = "delete" ] ; then ACTION=del ; fi
 
 if [ "$ACTION" = "del" ] ; then
 
- printf "Checking address $2..."
-
- IS_GOOD_ADDR=`echo "$2" | grep -c "$SANITY_CHECK"`
- if [ ! "$IS_GOOD_ADDR" = "1" ] ; then
-  printf "\b... *** FAILED! *** \n"
-  echo "Bad address: $2 for interface $INTERFACE/$SANITY_CHECK"
-  echo "Are you deleting the sponge from the right server?"
-  echo ""
-  exit 1
- fi
-
- IS_ALREADY_SPONGED=`grep -c -w "^$2" /etc/arpsponges`
+ # if the user gave address in CIDR notation, delete the "/xx" mask:
+ O_ADDR=`echo $2 | cut -d/ -f1`
+   
+ IS_ALREADY_SPONGED=`grep -c -w "$O_ADDR" /etc/arpsponges`
  if [ ! "$IS_ALREADY_SPONGED" = "1" ] ; then
   printf "\b... *** FAILED! *** \n"
-  echo "- $2 is NOT in /etc/arpsponges."
+  echo "- $O_ADDR is NOT in /etc/arpsponges."
   echo "- use \"sponge add\" to add the IP address if needed."
   exit 1
  fi
 
-printf "Deleting address $2..."
+printf "Deleting address $O_ADDR..."
 
-/sbin/ip addr del $2/$MASK dev $INTERFACE
+/sbin/ip addr del $O_ADDR/$MASK dev $INTERFACE
 
 DELRESULT="$?"
 
   if [ "$DELRESULT" = "0" ] ; then
    printf "...Success!\n\n"
-   grep -v -w "$2" /etc/arpsponges > /tmp/arpsponges.$$
+   grep -v -w "$O_ADDR" /etc/arpsponges > /tmp/arpsponges.$$
    if [ -f /tmp/arpsponges.$$ ] ; then cat /tmp/arpsponges.$$ > /etc/arpsponges ; rm -f /tmp/arpsponges.$$ ; else
     echo "Error: failed to update /etc/arpsponges!"
     exit 1
@@ -203,7 +228,7 @@ if [ "$ACTION" = "list" ] ; then
 
 echo ":::: Applied arp sponges on interface $INTERFACE:"
 
-awk -v interface="$INTERFACE" '{print "/sbin/ip addr list dev "interface" | grep "$1}' /etc/arpsponges | sh
+awk -v interface="$INTERFACE" '{print "/sbin/ip addr list dev "interface" | grep -w "$3}' /etc/arpsponges | sh
 
 fi
 
