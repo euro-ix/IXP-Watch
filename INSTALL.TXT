@@ -1,11 +1,5 @@
 IXP Watch Documentation          -    Robert Lister <rob@lonap.net>
 
-2003-01-28: Release version 1.5
-2003-04-10: Release version 1.7
-2005-12-30: Release version 1.8
-2012-05-17: Release version 1.9
-2018-01-24: Release version 1.10
-
 INSTALLATION
 ============
 
@@ -16,7 +10,7 @@ Prerequisites:
   - tshark - command line version of wireshark (formerly tethereal)
     http://www.wireshark.org/
   - Working DNS resolver (and possibly local DNS cache)
-  - Working MTA for sending alert messages
+  - Working MTA or msmtp for sending alert messages
   - Interface on the LAN you wish to monitor
    - Note that this interface WILL REQUIRE AN IP address on on the
      peering LAN for some of the layer 3 reporting to work.
@@ -30,6 +24,8 @@ Prerequisites:
   - syslogd or logging facility if you want to syslog the traffic alarms etc.
   - and, of course, the bash shell.
   - some coffee, and some time.
+
+  Debian: apt-get install tshark rrdtool msmtp
 
 
 Optional Extras
@@ -71,7 +67,16 @@ Getting it working
     such as tshark and wireshark can run as non-root users, but
     the only packet capture process can run as root.
 
-    To do this, set dumpcap to setuid root: 
+    - Debian wireshark package: add the user to the group wireshark group.
+      configure with: dpkg-reconfigure wireshark-common
+
+      Run `dpkg-reconfigure wireshark-common` and select **Yes** to the question 
+      asking if non-root users should be permitted. 
+      
+      Create a user called `ixpwatch`. Add it to group `wireshark`
+      (create this group if it doesn't exist)
+
+    Or, To do this, set dumpcap to setuid root: 
     # chmod u+s /usr/bin/dumpcap
 
     (See: http://wiki.wireshark.org/CaptureSetup/CapturePrivileges)
@@ -80,22 +85,24 @@ Getting it working
      often this permission gets broken and IXP Watch will just quietly
      exit and stop working. (Need a way to detect this in future version!)
 
-1. Find a suitable home for "ixp-watch" - /home/xxxx/bin/...
+1. Find a suitable home for "ixp-watch" - /usr/local/ixpwatch/...
    or some other directory where you can place cron scripts.
 
-2. Make a directory for samples and reports to go. On our system, this 
-   is called /dump and it has capacity (20G) of space. Depending
-   on how long you wish to retain the sample files. 
+2. Make a directory for samples and reports:  /var/ixpwatch/
 
-    Underneath this /dump directory, create two more directories:
+    Underneath this directory, create two more directories:
    
    ./watch
    ./samples
-   
+  
    Give the user/group appropriate permissions to these directories.
    (at a minimum of course, the user running ixp-watch rwx and 
    everybody else/group r-x
-   
+
+   Ensure it has enough capacity, Depending on how long you wish to 
+   retain the sample files (under ./samples/). We allocate about 20G
+   and retain samples for a couple of months.
+
    The report files live under ./watch are small, and you may wish 
    to retain these for longer as it's sometimes interesting for 
    historical purposes to have the stats like amount of ARP 
@@ -255,9 +262,8 @@ local4.debug                                     @loghost.your.net
 
 9. Supporting cron jobs: (/etc/crontab)
 
-0,15,30,45 * * * *  ixpwatch    /usr/local/bin/ixp-watch >/dev/null 2>&1
+*/15 * * * *        ixpwatch    /usr/local/bin/ixp-watch >/dev/null 2>&1
 3 9 * * *           ixpwatch    /usr/local/bin/ixp-watch-tidy > /dev/null 2>&1
-
 
 10. Add the IP Addresses for top arp targets that have gone away.
     this 'Arp Sponge' technique uses the IXP Watch machine to
@@ -267,6 +273,19 @@ local4.debug                                     @loghost.your.net
     Any router attempting to establish a BGP session to an IP address
     on the IXP Watch interface will be logged in the "dead BGP session"
     section of the reports.
+
+    There is an example arp sponge script included, and this requires sipcalc
+    to be installed.
+
+    If you are using IXP Manager, ARP sponge application can be automated rather
+    than using the manual version of sponge. See the included directory
+    ./IXP-Manager. It requires some simple cgi scripts on your IXP Manager
+    web server to return the required JSON output from IXP Manager's database.
+
+    You will need to create a VLAN in IXP Manager called "Sponged" and move any
+    retired IP addresses to the "Sponged" vlan in IXP Manager.
+
+    Creating the VLAN on the network is not required. We use VLAN ID 4096.
 
 
 Right. I think that's about it. :-)

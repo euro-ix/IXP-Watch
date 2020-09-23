@@ -1,4 +1,14 @@
 
+* 1.11 - 2020-08-24 - <rob@lonap.net>
+  - Roll in some LONAP changes.
+  - Better method of managing disk space / automatically remove samples if disk space
+    becomes low.
+  - Changes to ifconfig / use ip cmd instead.
+  - Changes to syslog / loghost
+  - Other small changes and bugfixes.
+  - Update html examples.
+  - Add IXP-Manager sponge automation tool and example cgi (see files in ./IXP-Manager)
+
 * 1.10 - 2018-01-24 - <rob@lonap.net>
 
   - Roll in some LONAP changes.
