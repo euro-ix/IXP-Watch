@@ -59,9 +59,10 @@ sponge tool included. See the directory ./IXP-Manager for example scripts.
   rsync the files somewhere etc.
 - Set permissions / owner so that ixpwatch can write files: `chown -R ixpwatch /var/ixpwatch`
 - Set up cron jobs:
-  - `10 */3 * * *        root        /usr/local/bin/update_ethers.sh`
   - `*/15 * * * *        ixpwatch    /usr/local/bin/ixp-watch >/dev/null 2>&1`
   - `3 9 * * *           ixpwatch    /usr/local/bin/ixp-watch-tidy > /dev/null 2>&1`
 
   - If using the auto_sponge tool for automating sponges from IXP Manager:
      - `*/5 * * * *         root        /usr/local/bin/auto_sponge update`
+     - `10 */3 * * *        root        /usr/local/bin/update_ethers.sh`
+
