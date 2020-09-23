@@ -54,7 +54,7 @@ sponge tool included. See the directory ./IXP-Manager for example scripts.
   - `/var/ixpwatch/samples`
   - `/var/ixpwatch/watch`
   - `/var/ixpwatch/www`
-- (For html reports, decide optput directory. Default is /var/ixpwatch/www)
+- (For html reports, decide output directory. Default is /var/ixpwatch/www)
 - The included html_example uses server side includes, but this could be changed to
   rsync the files somewhere etc.
 - Set permissions / owner so that ixpwatch can write files: `chown -R ixpwatch /var/ixpwatch`
