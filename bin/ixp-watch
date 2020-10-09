@@ -1,5 +1,5 @@
 #!/bin/bash
-# ixp-watch version: 1.11
+# ixp-watch version: 1.12
 # This file is part of IXP Watch
 #
 # IXP Watch is free software: you can redistribute it and/or modify it
@@ -426,15 +426,15 @@ done
 # Take the ICMP output and munge it to report:
 #
 # Old version of tshark:
-# grep -v "$MY_IP" $TEMP_DIR/icmp.$$ | awk '{print $3" "$4" "$5" "$6" "$7" "$8" "$10" "$11}' | sort | uniq -c | sort -rn > $LOG_ROOT/ICMP.LOG
+# grep -vw "$MY_IP" $TEMP_DIR/icmp.$$ | awk '{print $3" "$4" "$5" "$6" "$7" "$8" "$10" "$11}' | sort | uniq -c | sort -rn > $LOG_ROOT/ICMP.LOG
 #
 # New version of tshark:
-grep -v "$MY_IP" $TEMP_DIR/icmp.$$ | awk '{print $3" "$4" "$5" "$6" "$7" "$8" "$10}' | sort | uniq -c | sort -rn > $LOG_ROOT/ICMP.LOG
+grep -vw "$MY_IP" $TEMP_DIR/icmp.$$ | awk '{print $3" "$4" "$5" "$6" "$7" "$8" "$10}' | sort | uniq -c | sort -rn > $LOG_ROOT/ICMP.LOG
 
 # Find arp responses that are not for me, that I'm responding to,
 # so they must be sponged addresses.
 
-cat $TEMP_DIR/arps.$$ | grep -v $MY_IP | grep "is at $MY_ETHER" | awk '{print $5" arping for sponged address "$8}' | sort | uniq -c | sort -rn > $LOG_ROOT/ARPSPONGE.LOG
+cat $TEMP_DIR/arps.$$ | grep -vw $MY_IP | grep "is at $MY_ETHER" | awk '{print $5" arping for sponged address "$8}' | sort | uniq -c | sort -rn > $LOG_ROOT/ARPSPONGE.LOG
 
 # Find the top arpers:
 # ARP Output has changed for some reason they've bunged an extra word in there: (2013-12)

@@ -1,3 +1,5 @@
+* 1.12 - 2020-10-09 - robl
+  - Bugfix: Improve matching on MY_IP for ICMP/sponge.
 
 * 1.11 - 2020-08-24 - <rob@lonap.net>
   - Roll in some LONAP changes.
@@ -99,5 +101,3 @@
 
 * 1.5 - 2003-01-28 - <robl@linx.net>
   Initial release.
-
-
