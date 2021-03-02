@@ -1,5 +1,5 @@
 #!/bin/bash
-# ixp-watch version: 1.12
+# ixp-watch version: 1.13
 # This file is part of IXP Watch
 #
 # IXP Watch is free software: you can redistribute it and/or modify it
@@ -68,6 +68,7 @@ MAX_SAMPLE_SIZE=52428800  # Maximum sensible file size to try and process (50M)
 ENORMOUS_SAMPLE=`expr $MAX_SAMPLE_SIZE \* 25`  # If the file is too enormous, just delete it.
 
 # Disk space usage for disk where samples are stored.
+# (Comment this out to disable auto sample purge based on free disk space)
 DISK_PERCENT_PROG='/bin/df -h --output=pcent /'
 DISK_PERCENT_MAX=95   # Max disk use before deleting samples.
 
@@ -241,6 +242,36 @@ if [ ! -d $SAMPLE_ROOT/$YEAR/$MONTH/$DAY ] ; then
   ln -s $SAMPLE_ROOT/$YEAR/$MONTH/$DAY $SAMPLE_ROOT/today
 fi
 
+# If disk space is low, then try to delete some old sample files:
+if [ -n "${DISK_PERCENT_PROG:+1}" ]; then
+
+  DISK_PERCENT=`$DISK_PERCENT_PROG | tail -n+2 | sed s/[\ \%]//g`
+
+  if [ $DISK_PERCENT -ge $DISK_PERCENT_MAX ] ; then
+	  # Delete samples > 6h old bigger than MAX_SAMPLE_SIZE
+    echo "WARNING: Disk space low! Deleted samples: " >> $TEMP_DIR/err.$$
+	  find $SAMPLE_ROOT -size +$MAX_SAMPLE_SIZE -cmin +360 >> $TEMP_DIR/err.$$
+	  find $SAMPLE_ROOT -size +$MAX_SAMPLE_SIZE -cmin +360 -exec rm {} \;
+  fi
+
+ # See if that was enough, if not, delete more agressively:
+ DISK_PERCENT=`$DISK_PERCENT_PROG | tail -n+2 | sed s/[\ \%]//g`
+
+  if [ $DISK_PERCENT -ge $DISK_PERCENT_MAX ] ; then
+    # Delete samples > 1h old bigger than 20M:
+    echo "" >> $TEMP_DIR/err.$$
+    echo "WARNING: Disk space still low! Deleted samples: " >> $TEMP_DIR/err.$$
+    find $SAMPLE_ROOT -size +20M -cmin +60 >> $TEMP_DIR/err.$$
+    find $SAMPLE_ROOT -size +20M -cmin +60 -exec rm {} \;
+  fi
+
+  if [ -f "$TEMP_DIR/err.$$" ] ; then
+     $MAILPROG -s "[$NETWORK] Warning: disk space low - samples may be deleted" $ALARM_EMAIL < $TEMP_DIR/err.$$
+     rm $TEMP_DIR/err.$$
+  fi
+
+fi
+
 # Start sample capture
 
 # Older versions of tshark:
@@ -290,38 +321,6 @@ if [ $SAMPLESIZE -ge $MAX_SAMPLE_SIZE ] ; then
 
 fi
 
-# If disk space is low, then try to delete some old sample files:
-
-if [ ! "$DISK_PERCENT_PROG" = "" ] ; then
-
-DISK_PERCENT=`$DISK_PERCENT_PROG | tail -n+2 | sed s/[\ \%]//g`
-
-if [ $DISK_PERCENT -ge $DISK_PERCENT_MAX ] ; then
-	# Delete samples > 6h old bigger than MAX_SAMPLE_SIZE
-        echo "WARNING: Disk space low! Deleted samples: " >> $TEMP_DIR/err.$$
-	find $SAMPLE_ROOT -size +$MAX_SAMPLE_SIZE -cmin +360 >> $TEMP_DIR/err.$$
-	find $SAMPLE_ROOT -size +$MAX_SAMPLE_SIZE -cmin +360 -exec rm {} \;
-fi
-
-# See if that was enough, if not, delete more agressively:
-DISK_PERCENT=`$DISK_PERCENT_PROG | tail -n+2 | sed s/[\ \%]//g`
-
-if [ $DISK_PERCENT -ge $DISK_PERCENT_MAX ] ; then
-        # Delete samples > 1h old bigger than 20M:
-        echo "" >> $TEMP_DIR/err.$$
-        echo "WARNING: Disk space still low! Deleted samples: " >> $TEMP_DIR/err.$$
-        find $SAMPLE_ROOT -size +20M -cmin +60 >> $TEMP_DIR/err.$$
-        find $SAMPLE_ROOT -size +20M -cmin +60 -exec rm {} \;
-fi
-
-if [ -f "$TEMP_DIR/err.$$" ] ; then
-     $MAILPROG -s "[$NETWORK] Warning: disk space low - samples may be deleted" $ALARM_EMAIL < $TEMP_DIR/err.$$
-     rm $TEMP_DIR/err.$$
-  fi
-
-fi
-
-
 # Dump arps to text file from sample.
 # (This takes a while because we have to DNS resolve them all.)
 $TSHARK -n -N m -r $SAMPLEDIR/$FILEDATE -Y arp > $TEMP_DIR/arps.$$
@@ -352,7 +351,7 @@ $TSHARK -n -Y "tcp.flags.syn==1 and tcp.dstport==179 and not icmp" -r $SAMPLEDIR
 
 # Non-unicast traffic:
 # Multicasts and things directed to 255.255.255.255 (IGP/OSPF/Generally bad things)
-$TSHARK -n -r $SAMPLEDIR/$FILEDATE -Y "ip.dst >= 223.0.0.0 and not gre and not l2tp" | awk '{print $3" "$4" "$5" "$6" "$7" "$8" "$10" "$11}' | sort -n | uniq -c > $LOG_ROOT/NON_UNICAST.LOG
+$TSHARK -n -r $SAMPLEDIR/$FILEDATE -Y "ip.dst >= 224.0.0.0 and not gre and not l2tp" | awk '{print $3" "$4" "$5" "$6" "$7" "$8" "$10" "$11}' | sort -n | uniq -c > $LOG_ROOT/NON_UNICAST.LOG
 
 # Generate summary of ICMPv6 types:
 [ $IPV6 = 1 ] && $TSHARK -T fields -e icmpv6.type -r $SAMPLEDIR/$FILEDATE -Y icmpv6.type | sort | uniq -c | awk '{print $2":"$1}' > $TEMP_DIR/icmpv6types.$$

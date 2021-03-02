@@ -1,7 +1,20 @@
+* 1.13 - 2020-10-25 - robl
+  - Run disk space checks before starting sample capture, not after. 
+    This means it works if the disk is already full. It will now be run even 
+    if capture fails or the script exits for some reason. It might also free 
+    up enough disk space for the capture to succeed, rather than the capture
+    failing and the script exiting before the disk space check/purge can run.
+
+  - Make disk space check optional. (Don't do the check if DISK_PERCENT_PROG is 
+    undefined (commented out) or empty.)
+
+  - Bugfix: [Issue #2]: Correct non-unicast filter to use >= 224.0.0.0 and 
+    not >= 223.0.0.0
+
 * 1.12 - 2020-10-09 - robl
   - Bugfix: Improve matching on MY_IP for ICMP/sponge.
 
-* 1.11 - 2020-08-24 - <rob@lonap.net>
+* 1.11 - 2020-08-24 - robl
   - Roll in some LONAP changes.
   - Better method of managing disk space / automatically remove samples if disk space
     becomes low.
@@ -11,7 +24,7 @@
   - Update html examples.
   - Add IXP-Manager sponge automation tool and example cgi (see files in ./IXP-Manager)
 
-* 1.10 - 2018-01-24 - <rob@lonap.net>
+* 1.10 - 2018-01-24 - robl
 
   - Roll in some LONAP changes.
   - Update TSHARK commands for updated version of tshark (requires explicit
@@ -22,7 +35,7 @@
   - Minor changes to docs and comments.
   - Included html files from LONAP as example for RRD stats page.
 
-* 1.9 - 2012-05-17 - <rob@lonap.net>
+* 1.9 - 2012-05-17 - robl
   - I'm back. Different exchange this time...
   - Changed references to tethereal in EURO-IX released version to tshark.
   - Added basic RRDtool graph and html stats functionality.
@@ -31,7 +44,7 @@
   - bug fix: newer versions of tshark changed output slightly for ARP.
   - Now has GPL2 License as of 1.9 release. See LICENSE and LICENSE_OLD
 
-* 1.8 - 2005-12-30 - <robl@linx.net>
+* 1.8 - 2005-12-30 - robl
   - better handling of huge samples with the MAX_SAMPLE_SIZE parameter.
     Do not attempt to process a huge sample file, but just report this.
     - i.e, do not try to process a 2GB sample received if the network breaks!
@@ -44,7 +57,7 @@
   - exclude my own primary IP from capture samples.
   - bug fix: newer versions of tethereal changed output slightly for CDP.
 
-* 1.7-interim 2003-10-20 - <robl@linx.net>
+* 1.7-interim 2003-10-20 - robl
   - better handling of l2tp and GRE traffic spew.
   - bug fix: sponge tool - added full path name to "ip" commands.
   - changed some of the tethereal command lines not to DNS resolve
@@ -62,7 +75,7 @@
         without UCD-SNMP or Net-SNMP, without ADNS
         Running on Linux 2.4.18
 
-* 1.7  - 2003-04-10 - <robl@linx.net>
+* 1.7  - 2003-04-10 - robl
   - Things re-named to IXP Watch for marketing/copyright reasons :)
   - LICENCE File added. Just in case you were not sure!
   - Reports now show minutes rather than seconds duration.
@@ -78,7 +91,7 @@
 
   - Integrated Arnold Nipper's contributions. :-)
 
-+ >>>  - 2003-03-18 - <arnold.nipper@de-cix.net>
++ >>>  - 2003-03-18 - arnold (DE-CIX)
   - Added $MY_IP line for Solaris.
   - Added $MY_ETHER line for Solaris.
   - Added IPv6 address support
@@ -89,7 +102,7 @@
   - Other minor changes.
 
 
-* 1.6 - 2003-01-30 - <robl@linx.net>
+* 1.6 - 2003-01-30 - robl
   - Added "and not ICMP" to bgp sample line.
   - Changed ICMP report option to not report ICMP to $MY_IP.
   - Corrected a spelling mistake in the TODO file.
@@ -99,5 +112,5 @@
     (In need of a little work but it is stable.)
      Requires that /sbin/ip be suid root if non-root users wish to run it.
 
-* 1.5 - 2003-01-28 - <robl@linx.net>
+* 1.5 - 2003-01-28 - robl
   Initial release.
