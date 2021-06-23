@@ -42,7 +42,7 @@ sponge tool included. See the directory ./IXP-Manager for example scripts.
 
 - Install dependencies:     apt-get install sipcalc jq wget tshark rrdtool
 - Optional arpwatch tool:   apt-get install arpwatch
-- Install `./bin/ixp-watch-lonap` into `/usr/local/bin`
+- Install `./bin/ixp-watch` into `/usr/local/bin`
 - Install `./bin/ixp-watch-tidy` into `/usr/local/bin`
 - Install `./bin/sponge` (manual sponge tool)
 -  - or `./IXP-Manager/auto_sponge` into  `/usr/local/bin` (If using IXP Manager auto sponge)
