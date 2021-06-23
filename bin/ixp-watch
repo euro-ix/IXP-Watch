@@ -1,5 +1,5 @@
 #!/bin/bash
-# ixp-watch version: 1.13
+# ixp-watch version: 1.14
 # This file is part of IXP Watch
 #
 # IXP Watch is free software: you can redistribute it and/or modify it
@@ -20,78 +20,28 @@
 #### Local configuration. Things you WILL need to check                        #
 ################################################################################
 
-# REPORT_EMAIL='SOMETHING@YOUR.DOMAIN.HERE' # E-mail to send regular reports to
-# (or leave REPORT_EMAIL undefined if you don't want reports)
+# Where is config vars file:
+CONFIG=/usr/local/ixpwatch/config.sh
 
-ALARM_EMAIL='YOU@YOUR.DOMAIN.HERE' # E-mail to send bad thing alarms to
+# Config file can also be specified from the command line with -c <filename>:
+optstring=":c:"
 
-ALARM_PAGER='YOU@YOUR.DOMAIN.HERE' # E-Mail to page things out
-
-MAILPROG=/usr/bin/mail   # command to send e-mails
-# (redhat this is /bin/mail by default)
-
-GZIP='nice -n 10 /bin/gzip'       # Location of gzip prog
-
-CAP_INTERFACE=eth0        # Interface that we run the capture on
-
-SAMPLE_TIME=900           # Capture time in seconds (default 15 minutes)
-
-NETWORK='YOUR_NETWORK_HERE'   # Network Name. - some name
-
-# Local syslog facility. Leave blank to turn off.
-# (facility must be set up in your syslog.conf of course.)
-LOCAL_FACIL=local4.debug
+while getopts ${optstring} arg; do
+  case "${arg}" in
+    c)
+            # Set config file:
+            CONFIG=${OPTARG}
+    ;;
+  esac
+done
 
 
-# Remote syslog option. Comment out to disable it.
-LOGHOST=                  # optional syslog host to send alerts to
-                          # leave blank to log locally instead.
-                          # Check the below "/usr/bin/logger" commands to ensure
-                          # You are using "-n" or "-h" accordingly for Linux or BSD.
+if [ ! -f $CONFIG ] ; then
+ echo "Could not open config file $CONFIG!"
+ exit 1
+fi
 
-LOG_FACILITY=local4.debug # Facility to send logs to
-                          # leave both blank to not log anywhere.
-
-ARP_WARNLEVEL=4000        # Alert when number of ARPS Per Minute reaches this.
-                          # You may not know this now, but you can use the reports
-                          # to work out what is a reasonable level.
-
-SPANNING_TREE_BAD=1       # Do you want STP frames reported? 1=Yes 0=No.
-IPV6=1                    # Do you run IPv4 and IPv6? 1=Yes 0=No.
-
-WRITE_COUNTS=0            # Write counts to /tmp/ixpwatch.$NETWORK.counts?
-                          # (useful if you want to plot graphs etc) 1=Yes 0=No.
-                          # (See also COUNTSFILE below - you may need to change it!)
-
-MAX_SAMPLE_SIZE=52428800  # Maximum sensible file size to try and process (50M)
-
-ENORMOUS_SAMPLE=`expr $MAX_SAMPLE_SIZE \* 25`  # If the file is too enormous, just delete it.
-
-# Disk space usage for disk where samples are stored.
-# (Comment this out to disable auto sample purge based on free disk space)
-DISK_PERCENT_PROG='/bin/df -h --output=pcent /'
-DISK_PERCENT_MAX=95   # Max disk use before deleting samples.
-
-DO_RRD=0                  # Plot RRT?
-RRDTOOL=/usr/bin/rrdtool  # If so, where is RRDtool?
-
-# Directories to put things in:
-# *** These need to exist for this to work properly! ***
-
-SAMPLE_ROOT=/var/ixpwatch/samples
-LOG_ROOT=/var/ixpwatch/watch
-TEMP_DIR=/var/ixpwatch/tmp
-
-# Where to put RRD files and HTML files if DO_RRD is enabled:
-
-HTML_DIR=/var/ixpwatch/www
-RRD_DIR=${HTML_DIR}/graphs
-GRAPH_DIR=${HTML_DIR}/graphs
-
-
-# Where to find tshark:
-# (I'm going to trust this as correct.)
-TSHARK=/usr/bin/tshark
+source $CONFIG
 
 # Create TEMP_DIR if it doesn't exist:
 if [ ! -d $TEMP_DIR ] ; then mkdir -p $TEMP_DIR ; fi
@@ -109,20 +59,20 @@ if [ ! -d $TEMP_DIR ] ; then mkdir -p $TEMP_DIR ; fi
 # Linux new method:
 MY_IP=`/sbin/ip addr list $CAP_INTERFACE | grep "inet " | grep -v secondary | awk '{print $2}' | awk -F'/' '{print $1}'`
 
-if [ "$MY_IP" == "" ] ; then
+if [ -z "$MY_IP" ] ; then
 # Newer Linux - subtle change to ifconfig:
 # New versions output "inet x.x.x.x" not "inet addr x.x.x.x"
 MY_IP=`/sbin/ifconfig $CAP_INTERFACE | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*'`
 fi
 
-if [ "$MY_IP" == "" ] ; then
+if [ -z "$MY_IP" ] ; then
   echo "WARNING: Unable to determine correct IP address for peering LAN interface: $CAP_INTERFACE." >> $TEMP_DIR/err.$$
   echo "please check ixp-watch script variable MY_IP" >> $TEMP_DIR/err.$$
   MY_IP=`/bin/hostname -I | awk '{print $1}'` >> $TEMP_DIR/err.$$
   echo "Proceeding with $MY_IP for now. (Might be wrong)" >> $TEMP_DIR/err.$$
 fi
 
-if [ "$MY_IP" == "" ] ; then
+if [ -z "$MY_IP" ] ; then
   echo "WHOOPS: Unable to determine any IP address. Exiting." >> $TEMP_DIR/err.$$
   WHOOPS=1
 fi
@@ -143,12 +93,12 @@ fi
 # Linux This is: (new output)
 MY_ETHER=`/sbin/ifconfig $CAP_INTERFACE | grep "ether " | awk '{print $2}' | tr [A-Z] [a-z]`
 
-if [ "$MY_ETHER" == "" ] ; then
+if [ -z "$MY_ETHER" ] ; then
   # .. or maybe this: (old output)
   MY_ETHER=`/sbin/ifconfig $CAP_INTERFACE | grep "HWaddr " | awk '{print $5}' | tr [A-Z] [a-z]`
 fi
 
-if [ "$MY_ETHER" == "" ] ; then
+if [ -z "$MY_ETHER" ] ; then
   echo "WARNING: Unable to determine MAC address for peering LAN interface: $CAP_INTERFACE." >> $TEMP_DIR/err.$$
   echo "please check ixp-watch script variable MY_ETHER" >> $TEMP_DIR/err.$$
   WHOOPS=1
@@ -195,7 +145,7 @@ if [ -f "$TEMP_DIR/err.$$" ] ; then
 fi
 
 
-if [ "$WHOOPS" == 1 ] ; then
+if [ -n "$WHOOPS" ] ; then
         echo "*** Script error occurred. Exiting!"
         cat $TEMP_DIR/err.$$
         rm -f $TEMP_DIR/err.$$
@@ -326,8 +276,7 @@ fi
 $TSHARK -n -N m -r $SAMPLEDIR/$FILEDATE -Y arp > $TEMP_DIR/arps.$$
 
 # Not arp and not IP (picks up CDP, etc.)
-EXPRESSION="not arp and not ip"
-[ $IPV6 = 1 ] && EXPRESSION="not arp and not ip and not ipv6 and not gre and not l2tp"
+EXPRESSION="not arp and not ip and not ipv6 and not gre and not l2tp"
 $TSHARK -n -N m -r $SAMPLEDIR/$FILEDATE -Y "$EXPRESSION" > $TEMP_DIR/notip.$$
 
 # ICMP
@@ -347,14 +296,21 @@ $TSHARK -r $SAMPLEDIR/$FILEDATE -Y "snmp and not gre and not l2tp" | awk '{print
 
 # BGP - Members trying to open BGP to one of our sponged
 # addresses will show up here:
-$TSHARK -n -Y "tcp.flags.syn==1 and tcp.dstport==179 and not icmp" -r $SAMPLEDIR/$FILEDATE | awk '{print $3" -> " $5}' | sort -t\. -k3.1,3.3n -k4n | uniq > $LOG_ROOT/BGPOPENS.LOG
+if [ $BGPOPENS_OLD_FORMAT = "1" ] ; then
+ $TSHARK -n -Y "tcp.flags.syn==1 and tcp.dstport==179 and not icmp" -r $SAMPLEDIR/$FILEDATE | awk '{print $3" -> " $5}' | sort -t\. -k3.1,3.3n -k4n | uniq > $LOG_ROOT/BGPOPENS.LOG
+else
+ $TSHARK -NnN -T fields -e ip.src -e ip.src_host -e eth.src -e ip.dst -Y "not ipv6 and tcp.flags.syn==1 and tcp.dstport==179 and not icmp" -r $SAMPLEDIR/$FILEDATE | sort -t \. -k3.1,3.3n -k4n | uniq > $LOG_ROOT/BGPOPENS.LOG
+fi
 
 # Non-unicast traffic:
 # Multicasts and things directed to 255.255.255.255 (IGP/OSPF/Generally bad things)
 $TSHARK -n -r $SAMPLEDIR/$FILEDATE -Y "ip.dst >= 224.0.0.0 and not gre and not l2tp" | awk '{print $3" "$4" "$5" "$6" "$7" "$8" "$10" "$11}' | sort -n | uniq -c > $LOG_ROOT/NON_UNICAST.LOG
 
 # Generate summary of ICMPv6 types:
-[ $IPV6 = 1 ] && $TSHARK -T fields -e icmpv6.type -r $SAMPLEDIR/$FILEDATE -Y icmpv6.type | sort | uniq -c | awk '{print $2":"$1}' > $TEMP_DIR/icmpv6types.$$
+$TSHARK -T fields -e icmpv6.type -r $SAMPLEDIR/$FILEDATE -Y icmpv6.type | sort | uniq -c | awk '{print $2":"$1}' > $TEMP_DIR/icmpv6types.$$
+
+# Generate report of IPV6 Router Advertisements:
+$TSHARK -T fields -e ipv6.src -e eth.src_resolved -r $SAMPLEDIR/$FILEDATE -Y "icmpv6.type == 134" | sort | uniq -c | sort -rn > $LOG_ROOT/IPV6_RA.LOG
 
 # Right. We've got all the samples we want in text files,
 # Now to summarise the packets samples into reports.
@@ -371,7 +327,11 @@ cat $LOG_ROOT/NOT_IP.LOG | sed 's/[^a-zA-Z0-9\ \:\>\-]/_/g' | grep -v "STP " | a
 # Non IP Unicast (OSPF and other IGPs and baddies.)
 cat $LOG_ROOT/NON_UNICAST.LOG | awk '{print "echo \"Alarm for "$__"\">"$2"__"$4}' | sh
 
+# IPv6 RA
+cat $LOG_ROOT/IPV6_RA.LOG | sed 's/[^a-zA-Z0-9\t\ \:\>\-]/_/g' | awk '{print "echo \"Alarm for IPv6 RA "$__"\" >"$3".ipv6_ra"}' | sh
+
 # Any SNMP we can report?
+NUM_SNMP=0
 
 if [ -f $LOG_ROOT/SNMP.LOG ] ; then
  NUM_SNMP=`grep -ci "SNMP " $LOG_ROOT/SNMP.LOG`
@@ -450,22 +410,22 @@ NUM_NOTIP=`wc -l $TEMP_DIR/notip.$$ |  awk '{print $1}'`
 NUM_ICMP=`wc -l $TEMP_DIR/icmp.$$ |  awk '{print $1}'`
 NUM_IP=`wc -l $TEMP_DIR/ip.$$ |  awk '{print $1}'`
 
-[ $IPV6 = 1 ] && NUM_IP6=`wc -l $TEMP_DIR/ip6.$$ |  awk '{print $1}'`
-[ $IPV6 = 1 ] && NUM_ICMP6=`wc -l $TEMP_DIR/icmp6.$$ |  awk '{print $1}'`
+NUM_IP6=`wc -l $TEMP_DIR/ip6.$$ |  awk '{print $1}'`
+NUM_ICMP6=`wc -l $TEMP_DIR/icmp6.$$ |  awk '{print $1}'`
 
 # Breakdown of ICMP types:
-[ $IPV6 = 1 ] && NUM_ICMP6_128=`cat $TEMP_DIR/icmpv6types.$$ | grep "^128" | cut -d: -f2`
-[ $IPV6 = 1 ] && NUM_ICMP6_129=`cat $TEMP_DIR/icmpv6types.$$ | grep "^129" | cut -d: -f2`
-[ $IPV6 = 1 ] && NUM_ICMP6_130=`cat $TEMP_DIR/icmpv6types.$$ | grep "^130" | cut -d: -f2`
-[ $IPV6 = 1 ] && NUM_ICMP6_131=`cat $TEMP_DIR/icmpv6types.$$ | grep "^131" | cut -d: -f2`
-[ $IPV6 = 1 ] && NUM_ICMP6_132=`cat $TEMP_DIR/icmpv6types.$$ | grep "^132" | cut -d: -f2`
-[ $IPV6 = 1 ] && NUM_ICMP6_133=`cat $TEMP_DIR/icmpv6types.$$ | grep "^133" | cut -d: -f2`
-[ $IPV6 = 1 ] && NUM_ICMP6_134=`cat $TEMP_DIR/icmpv6types.$$ | grep "^134" | cut -d: -f2`
-[ $IPV6 = 1 ] && NUM_ICMP6_135=`cat $TEMP_DIR/icmpv6types.$$ | grep "^135" | cut -d: -f2`
-[ $IPV6 = 1 ] && NUM_ICMP6_135=`cat $TEMP_DIR/icmpv6types.$$ | grep "^135" | cut -d: -f2`
-[ $IPV6 = 1 ] && NUM_ICMP6_136=`cat $TEMP_DIR/icmpv6types.$$ | grep "^136" | cut -d: -f2`
-[ $IPV6 = 1 ] && NUM_ICMP6_137=`cat $TEMP_DIR/icmpv6types.$$ | grep "^137" | cut -d: -f2`
-[ $IPV6 = 1 ] && NUM_ICMP6_143=`cat $TEMP_DIR/icmpv6types.$$ | grep "^143" | cut -d: -f2`
+NUM_ICMP6_128=`cat $TEMP_DIR/icmpv6types.$$ | grep "^128" | cut -d: -f2`
+NUM_ICMP6_129=`cat $TEMP_DIR/icmpv6types.$$ | grep "^129" | cut -d: -f2`
+NUM_ICMP6_130=`cat $TEMP_DIR/icmpv6types.$$ | grep "^130" | cut -d: -f2`
+NUM_ICMP6_131=`cat $TEMP_DIR/icmpv6types.$$ | grep "^131" | cut -d: -f2`
+NUM_ICMP6_132=`cat $TEMP_DIR/icmpv6types.$$ | grep "^132" | cut -d: -f2`
+NUM_ICMP6_133=`cat $TEMP_DIR/icmpv6types.$$ | grep "^133" | cut -d: -f2`
+NUM_ICMP6_134=`cat $TEMP_DIR/icmpv6types.$$ | grep "^134" | cut -d: -f2`
+NUM_ICMP6_135=`cat $TEMP_DIR/icmpv6types.$$ | grep "^135" | cut -d: -f2`
+NUM_ICMP6_135=`cat $TEMP_DIR/icmpv6types.$$ | grep "^135" | cut -d: -f2`
+NUM_ICMP6_136=`cat $TEMP_DIR/icmpv6types.$$ | grep "^136" | cut -d: -f2`
+NUM_ICMP6_137=`cat $TEMP_DIR/icmpv6types.$$ | grep "^137" | cut -d: -f2`
+NUM_ICMP6_143=`cat $TEMP_DIR/icmpv6types.$$ | grep "^143" | cut -d: -f2`
 
 NUM_BGP=`wc -l $LOG_ROOT/BGPOPENS.LOG |  awk '{print $1}'`
 
@@ -487,14 +447,13 @@ echo "--------------------------------------------------------------------------
 echo "ARP Queries......: $NUM_ARP">>$LOGDIR/$FILEDATE.TXT
 echo "ARPs per minute..: $NUM_ARPS_MIN">>$LOGDIR/$FILEDATE.TXT
 echo "IP Packets.......: $NUM_IP">>$LOGDIR/$FILEDATE.TXT
-[ $IPV6 = 1 ] && echo "IP6 Packets......: $NUM_IP6">>$LOGDIR/$FILEDATE.TXT
+echo "IP6 Packets......: $NUM_IP6">>$LOGDIR/$FILEDATE.TXT
 echo "ICMP Packets.....: $NUM_ICMP">>$LOGDIR/$FILEDATE.TXT
-[ $IPV6 = 1 ] && echo "ICMPv6 Packets...: $NUM_ICMP6">>$LOGDIR/$FILEDATE.TXT
+echo "ICMPv6 Packets...: $NUM_ICMP6">>$LOGDIR/$FILEDATE.TXT
 echo "NON-IP Packets...: $NUM_NOTIP">>$LOGDIR/$FILEDATE.TXT
 echo "ARPs Sponged.....: $NUM_SPONGE_REPLY">>$LOGDIR/$FILEDATE.TXT
 echo "Dead BGP Peers...: $NUM_BGP">>$LOGDIR/$FILEDATE.TXT
 
-if [ "$IPV6" == "1" ] ; then
 echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
 echo ":::::: ICMPv6 TYPE SUMMARY">>$LOGDIR/$FILEDATE.TXT
 echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
@@ -511,7 +470,6 @@ if [ -n "$NUM_ICMP6_136" ] ; then echo "ICMPv6 136 Neighbor Advertisement (NDP).
 if [ -n "$NUM_ICMP6_137" ] ; then echo "ICMPv6 137 Redirect Message (NDP).................: $NUM_ICMP6_137">>$LOGDIR/$FILEDATE.TXT ; fi
 if [ -n "$NUM_ICMP6_143" ] ; then echo "ICMPv6 143 Multicast Listener Discovery (MLDv2)...: $NUM_ICMP6_143">>$LOGDIR/$FILEDATE.TXT ; fi
 
-fi
 
 echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
 echo ":::::: TOP 30 ARPERS">>$LOGDIR/$FILEDATE.TXT
@@ -552,6 +510,14 @@ echo "--------------------------------------------------------------------------
 cat $LOG_ROOT/ICMP.LOG>>$LOGDIR/$FILEDATE.TXT
 echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
 
+if [ -f $LOG_ROOT/IPV6_RA.LOG ] ; then
+echo ":::::: IPv6 ROUTER ADVERTISEMENTS">>$LOGDIR/$FILEDATE.TXT
+echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
+cat $LOG_ROOT/IPV6_RA.LOG >>$LOGDIR/$FILEDATE.TXT
+echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
+fi
+
+
 if [ -f $TEMP_DIR/alarms.tmp ] ; then
   # Some new alarms have happened! Mail out the new alarms.
   # (and append to this report)
@@ -563,14 +529,14 @@ if [ -f $TEMP_DIR/alarms.tmp ] ; then
 
  # Do syslog things if defined:
 
- if [ ! "$LOCAL_FACIL" = "" ] ; then
+ if [ -n "$LOCAL_FACIL" ] ; then
   cat $TEMP_DIR/alarms.tmp | /usr/bin/logger -p $LOCAL_FACIL -t ixp-watch
  fi
 
 # Note: Redhat/Linux doesn't support the "-h" option for syslog logger.
 # instead, use the equivalent "-n" or log to syslog locally.
 
- if [ ! "$LOGHOST" = "" ] ; then
+ if [ -n "$LOGHOST" ] ; then
   # LINUX:
   cat $TEMP_DIR/alarms.tmp | /usr/bin/logger -p $LOG_FACILITY -n $LOGHOST -t ixp-watch
   # FreeBSD:
@@ -582,7 +548,7 @@ fi
 
 # Copy reports to HTML location if defined:
 
-if [ ! "$HTML_DIR" = "" ] ; then
+if [ -n "$HTML_DIR" ] ; then
 
    if [ ! -d $HTML_DIR ] ; then mkdir -p $HTML_DIR ; fi
 
@@ -723,7 +689,7 @@ fi
 
 # If you want to send full reports to e-mail:
 
-if [ ! "$REPORT_EMAIL" = "" ] ; then
+if [ -n "$REPORT_EMAIL" ] ; then
  $MAILPROG -s "[$NETWORK] Traffic Summary Report" $REPORT_EMAIL< $LOGDIR/$FILEDATE.TXT
 fi
 

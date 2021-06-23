@@ -109,12 +109,18 @@ Getting it working
    increase over years or months.
 
    
-3. Edit the ixp-watch script. You will need to set the variables 
-   at the top of the script so that it works correctly in your 
-   environment.
+3. Edit the ixp-watch script. Check that the CONFIG varible points to
+   the location of the config.sh file (ours is /usr/local/ixpwatch/config.sh)
 
-   SAMPLE_ROOT=/path/to/your/samples
-   LOG_ROOT=/path/to/your/watch
+   Config file may also be specified on the command line with
+    -c <filename> e.g. "-c /usr/local/ixpwatch/config_lan_a.sh" to allow
+    for multiple instances.
+    
+   Edit config.sh. You will need to set the variables so that it works correctly 
+   in your environment.
+
+   SAMPLE_ROOT=/path/to/your/samples (e.g. /var/ixpwatch/samples)
+   LOG_ROOT=/path/to/your/watch      (e.g. /var/ixpwatch/watch)
    
    Other variables, such as the path to tshark, gzip, mail
    etc may need to be set to the correct location.
@@ -122,13 +128,10 @@ Getting it working
    however, not all (solaris) will, so you may need to change it to 
    "mailx" or "/usr/ucb/mail" etc.
 
-
    SAMPLE_TIME=nnn
    
    How long to tell 'tshark' to capture for. I capture for 15 minutes 
    (SAMPLE_TIME=900) and the script runs from crontab every 15 minutes.
-
-
 
    ARP_WARNLEVEL=nnnn
 
@@ -164,8 +167,7 @@ Getting it working
    in order to stop disks from filling up. In times of network trouble the sample
    files can occasionally be many gigabytes, and there may not be much we can do
    with these files, or attempt to process them. (Or your disks will fill up
-   very quickly) (See the ENORMOUS_SAMPLE section of the script - which is 
-   commented out by default - for an example!)
+   very quickly) (See the ENORMOUS_SAMPLE section of the script)
 
 
 4. Check what the output of "ifconfig" looks like on your system, for 
@@ -208,10 +210,6 @@ Getting it working
    
    If you comment out REPORT_EMAIL, these reports will not be sent, but 
    filed only in the ./watch directory under the date.
-   
-   We use this only to publish the reports on the web site. (The MTA on
-   the web server has a special e-mail address that runs a script to
-   publish the report on the correct bit of the web site...)
 
    ALARM_EMAIL = Email address of where to send new alarms when they are 
    detected.

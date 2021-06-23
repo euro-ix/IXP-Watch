@@ -3,11 +3,6 @@ IXP Watch Documentation     -    Robert Lister <rob@lonap.net>
 TODO LIST
 =========
 
-* Easier policy implementation rather than having to hack the script.
-  - Getting there but still not great.
-  - Probably the next release will have a seperate config file
-    rather than having to re-hack the script for each upgrade.
-
 * Maybe some realtime support for reading tshark output from stdin so
   that immediate alerts could be sent as soon as bad traffic is seen
   rather than waiting until the end of the session to report if found in

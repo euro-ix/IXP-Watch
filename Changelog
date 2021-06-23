@@ -1,3 +1,15 @@
+* 1.14 - 2021-06-23 - robl
+  - IPv6 is a thing now. Removed option to disable IPv6 processing.
+  - Add report and alert for IPv6 Router Advertisements.
+  - Fixes [Issue #3]: Use better tests -z and -n instead of == operator 
+    and "" to test empty values. (This was throwing an error in some 
+    environments if POSIX-incompatible shell is used)
+  - Make the dead BGP sessions output more useful by resolving IPs. To use 
+    old format instead, set BGPOPENS_OLD_FORMAT=1
+  - Move user config variables to a seperate file to make upgrades easier.
+  - Config file can now be specified with "-c <filename>" to make
+    running multiple instances for multiple LANs easier.
+
 * 1.13 - 2020-10-25 - robl
   - Run disk space checks before starting sample capture, not after. 
     This means it works if the disk is already full. It will now be run even 

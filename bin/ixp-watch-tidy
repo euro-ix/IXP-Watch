@@ -29,32 +29,54 @@
 # the sample files after some number of days to avoid disk
 # filling up on the host machine!
 
-SAMPLESDIR=/var/ixpwatch/samples
+# Where is config vars file:
+CONFIG=/usr/local/ixpwatch/config.sh
 
-if [ ! -d "$SAMPLESDIR" ] ; then
+# Config file can also be specified from the command line with -c <filename>:
+optstring=":c:"
 
-	echo "Unable to locate directory: $SAMPLESDIR"
+while getopts ${optstring} arg; do
+  case "${arg}" in
+    c)
+            # Set config file:
+            CONFIG=${OPTARG}
+    ;;
+  esac
+done
+
+
+if [ ! -f $CONFIG ] ; then
+ echo "Could not open config file $CONFIG!"
+ exit 1
+fi
+
+source $CONFIG
+
+
+if [ ! -d "$SAMPLE_ROOT" ] ; then
+
+	echo "Unable to locate directory: $SAMPLE_ROOT"
 	exit 1
 
 fi
 
-cd $SAMPLESDIR
+cd $SAMPLE_ROOT
 
 # Check that we can cd in the right directory before we start
 # trying to delete stuff!
 
-if [ "$PWD" != "$SAMPLESDIR" ] ; then
+if [ "$PWD" != "$SAMPLE_ROOT" ] ; then
 
-	echo "ERROR: Unable to cd to $SAMPLESDIR!"
+	echo "ERROR: Unable to cd to $SAMPLE_ROOT!"
 	exit 1
 
 fi
 
 # Remove samples files over 7 days old:
-find $SAMPLESDIR -type f -ctime +7 -exec rm {} \;
-# find $SAMPLESDIR -type f -ctime +7 -exec ls {} \;
+find $SAMPLE_ROOT -type f -ctime +7 -exec rm {} \;
+# find $SAMPLE_ROOT -type f -ctime +7 -exec ls {} \;
 
 # Remove empty directories:
-find $SAMPLESDIR -type d -empty -exec rmdir {} \;
-# find $SAMPLESDIR -type d -empty -exec ls {} \;
+find $SAMPLE_ROOT -type d -empty -exec rmdir {} \;
+# find $SAMPLE_ROOT -type d -empty -exec ls {} \;
 
