@@ -1,0 +1,322 @@
+#!/bin/bash
+
+
+clear
+
+REPO_URL="https://github.com/euro-ix/IXP-Watch.git"
+
+DEF_INSTALL_DIR="/usr/local/ixpwatch2"
+DEF_LINK_DIR="/usr/local/bin"
+DEF_DATA_DIR="/var/ixpwatch2"
+DEF_CONF_DIR="/etc/ixpwatch"
+
+DEF_CAP_INTERFACE="eth1"
+DEF_NETWORK="IXP-LAN"
+
+# install these packages on debian/ubuntu by default:
+DEF_PACKAGES="tshark"
+
+DEF_USER="ixpwatch2"
+
+RUNNING_USER=`whoami`
+
+echo "IXP-Watch Install Script"
+echo "========================"
+echo ""
+echo "This script will attempt to install a working IXP-Watch with some"
+echo "default settings to get started."
+echo ""
+echo "Please read INSTALL.TXT to understand the config options in more detail."
+echo ""
+echo ""
+
+if [ $RUNNING_USER != "root" ] ; then
+	echo " *** This script needs to run as root, because it needs to install packages"
+	echo "     and to set the correct permissions."
+	exit 1
+fi
+
+if [ -f /etc/debian_version ] ; then
+ DEBIAN=`cat /etc/debian_version`
+ echo "** Debian/Ubuntu $DEBIAN found. Will ask to install apt packages."
+else
+ echo "** Not Debian / Ubuntu. You may need to install extra packages for tshark, rrdtool etc."
+fi
+echo ""
+
+GIT=`which git`
+
+if [ -z "$GIT" ] ; then
+
+    echo "*** git not found! "
+
+	if [ -n "$DEBIAN" ] ; then
+	 printf "...will install git with apt"
+	 DEF_PACKAGES="git ${DEF_PACKAGES}"
+
+	else
+
+	 exit 1
+
+	fi
+
+echo ""
+
+fi
+
+# Get prompt to variable and make it look nice
+get_prompt () {
+
+	local PROMPT_TEXT=$1
+	local PROMPT_DEFAULT=$2
+
+	local prompt_len=${#PROMPT_DEFAULT}
+
+	if [ $prompt_len -le 1 ] ; then
+	 local OPTS="-n 1"
+    else
+	 local OPTS="-e -i ${PROMPT_DEFAULT}"
+	fi
+
+    local ten="          "
+    local pad="$ten$ten$ten"
+
+	if [ -n "$PROMPT_DEFAULT" ] ; then
+	    local prompt="${PROMPT_TEXT}"
+		prompt="${prompt:0:40}${pad:0:$((40 - ${#prompt}))} : "
+        read -p "$prompt" ${OPTS}
+	else
+    	read -p "${PROMPT_TEXT}" ${OPTS}
+	fi
+
+	echo "${REPLY}"
+}
+
+function yes_or_no {
+	local default=$2
+	local defprompt="[y/n]"
+
+	 if [ "$default" = "y" ] ; then defprompt="[Y/n]" ; local retval="1" ; fi
+	 if [ "$default" = "n" ] ; then defprompt="[y/N]" ; local retval="0" ; fi
+
+    while true; do
+	    yn=$( get_prompt "$1 $defprompt" "$default" )
+        case $yn in
+            [Yy]*) echo "1" ; return 1 ;;  
+            [Nn]*) echo "0" ; return 0 ;;
+			*) echo "${retval}" ; return $retval ;;
+        esac
+    done
+}
+
+
+INSTALLDIR=$( get_prompt "Script install directory" ${DEF_INSTALL_DIR} )
+
+echo ""
+echo "Data directory setup. Must be a location with sufficient space"
+echo "for example 5-10G for sample and report storage."
+echo ""
+
+DATA_DIR=$( get_prompt "Data directory"          "${DEF_DATA_DIR}" )
+CONF_DIR=$( get_prompt "Config directory"        "${DEF_CONF_DIR}" )
+
+SAMPLE_ROOT="${DATA_DIR}/samples"
+LOG_ROOT="${DATA_DIR}/watch"
+TEMP_DIR="${DATA_DIR}/tmp"
+
+DEF_HTML_DIR="${DATA_DIR}/www"
+
+echo ""
+CAP_INTERFACE=$( get_prompt "Peering LAN capture interface"  ${DEF_CAP_INTERFACE} )
+NETWORK=$( get_prompt "Name for this peering LAN (1 word)"   ${DEF_NETWORK}       )
+NETWORK=`echo "${NETWORK}" | sed s/[^\.a-zA-Z0-9_\-]//g`
+
+echo ""
+CONFIG=$( get_prompt "Config file (will be created)"       ${CONF_DIR}/${NETWORK}.conf )
+echo ""
+
+USER=$( get_prompt "user/group to add for ixpwatch"        ${DEF_USER}   )
+GROUP=${USER}
+
+echo ""
+echo "Email settings"
+echo "=============="
+echo ""
+echo "Email for alerts notification: Address to receive IXP-Watch notifications (must be set)"
+echo "Email for SMS/pager: for urgent alerts (STP and ARP storms) (optional)"
+echo "You may also enable REPORT_EMAIL in the config to receive a copy of every report"
+echo ""
+
+ALARM_EMAIL=$( get_prompt "Email for alerts"  ${USER} )
+ALARM_PAGER=$( get_prompt "Email for SMS/urgent alerts" ${ALARM_EMAIL} )
+
+echo ""
+echo "Optional extras"
+echo "==============="
+DO_RRD=$( yes_or_no "Set up RRD graphs? [yes]" y) ; echo ""
+
+if [ $DO_RRD = 1 ] ; then
+
+ DEF_PACKAGES="${DEF_PACKAGES} rrdtool"
+
+ HTML_DIR=$( get_prompt "- Directory for html output"       ${DEF_HTML_DIR}  )
+ RRD_DIR=$( get_prompt "- Directory for RRD files"          "${DEF_HTML_DIR}/graphs" )
+ GRAPH_DIR=$( get_prompt "- Directory for graph png files"  "${DEF_HTML_DIR}/graphs" )
+else
+ HTML_DIR=${DEF_HTML_DIR}
+ RRD_DIR=${DEF_HTML_DIR}/graphs
+ GRAPH_DIR=${DEF_HTML_DIR}/graphs
+fi
+echo ""
+echo "== Creating directories:"
+
+CREATE_DIRS="$INSTALLDIR $DATA_DIR $CONF_DIR $SAMPLE_ROOT $LOG_ROOT $TEMP_DIR $HTML_DIR $RRD_DIR $GRAPH_DIR"
+
+for dir in ${CREATE_DIRS}
+
+  do 
+
+    echo "- $dir"
+
+	if [ -d "$dir" ] ; then
+
+	    if [ "$dir" = "$INSTALLDIR" ] ; then
+
+		  clobber=$( yes_or_no "dir exists! replace? [yes]" y)
+
+		  if [ "$clobber" = "1" ] ; then
+		    rm -rf $dir
+          else
+		    echo "not replacing. Install may not work correctly!"
+         fi
+    echo ""
+  	    fi
+	fi
+
+done
+
+for dir in ${CREATE_DIRS}
+
+  do 
+  mkdir -p $dir || exit 1
+
+done
+
+
+if [ -n "$DEBIAN" ] ; then
+  echo ""
+  DO_ARPWATCH=$( yes_or_no "Install arpwatch tool? [yes]" y)
+ if [ $DO_ARPWATCH = 1 ] ; then
+   DEF_PACKAGES="${DEF_PACKAGES} arpwatch"
+ fi
+ echo ""
+ echo "== Preparing apt selections..."
+ echo "wireshark-common wireshark-common/install-setuid boolean true" | debconf-set-selections
+ echo ""
+ echo "== Installing apt packages..."
+ 
+  for package in ${DEF_PACKAGES}
+  do 
+    echo "-->> installing: $package : "
+    apt-get -y install $package
+  done
+fi
+
+GIT=`which git`
+if [ -z "$GIT" ] ; then
+ echo "** git not found! please install to continue!"
+ echo ""
+ exit 1
+fi
+
+echo ""
+echo "== Fetching from repository into ${INSTALLDIR}"
+
+git clone ${REPO_URL} ${INSTALLDIR} || exit 1
+
+echo "== Create user for ixpwatch: ${USER}"
+useradd -c "IXP-Watch User" -d ${DEF_DATA_DIR} -s /bin/bash --no-create-home --system ${USER}
+usermod -a -G wireshark ${USER}
+
+echo ""
+echo "== Setting up files:"
+
+mkdir -p ${DEF_LINK_DIR}
+for file in ${INSTALLDIR}/bin/*
+do
+        if [ ! -e "${DEF_LINK_DIR}/${file}" ] ; then
+        ln -s $file ${DEF_LINK_DIR}
+		fi
+done
+
+for file in ${INSTALLDIR}/html_example/*
+do
+	    if [ ! -e "${HTML_DIR}/${file}" ] ; then
+		  cp ${INSTALLDIR}/html_example/* ${HTML_DIR}
+		fi
+done
+
+echo "== Writing configuration to ${CONFIG}"
+echo "s|^ALARM_EMAIL=.*|ALARM_EMAIL=\'${ALARM_EMAIL}\'|g" | tee /tmp/sed_cmd.$$
+echo "s|^ALARM_PAGER=.*|ALARM_PAGER=\'${ALARM_PAGER}\'|g" | tee -a /tmp/sed_cmd.$$
+echo "s|^NETWORK.*|NETWORK=\'${NETWORK}\'|g"              | tee -a /tmp/sed_cmd.$$
+echo "s|^CAP_INTERFACE=.*|CAP_INTERFACE=${CAP_INTERFACE}|g" | tee -a /tmp/sed_cmd.$$
+echo "s|^DO_RRD=.*|DO_RRD=${DO_RRD}|g" | tee -a /tmp/sed_cmd.$$
+echo "s|^SAMPLE_ROOT=.*|SAMPLE_ROOT=${SAMPLE_ROOT}|g" | tee -a /tmp/sed_cmd.$$
+echo "s|^LOG_ROOT=.*|LOG_ROOT=${LOG_ROOT}|g" | tee -a /tmp/sed_cmd.$$
+echo "s|^TEMP_DIR=.*|TEMP_DIR=${TEMP_DIR}|g" | tee -a /tmp/sed_cmd.$$
+echo "s|^HTML_DIR=.*|HTML_DIR=${HTML_DIR}|g" | tee -a /tmp/sed_cmd.$$
+echo "s|^RRD_DIR=.*|RRD_DIR=${RRD_DIR}|g" | tee -a /tmp/sed_cmd.$$
+echo "s|^GRAPH_DIR=.*|GRAPH_DIR=${GRAPH_DIR}|g" | tee -a /tmp/sed_cmd.$$
+
+sed -f /tmp/sed_cmd.$$ ${INSTALLDIR}/conf/config.dist > ${CONFIG}
+rm -f /tmp/sed_cmd.$$
+
+# CONFIG var needs setting in scripts:
+for file in ${INSTALLDIR}/bin/*
+  do
+        sed s^CONFIG=.*^CONFIG=${CONFIG}^ -i ${file}
+  done
+
+id -u ${USER} > /dev/null
+USER_OK=$?
+if [ "$USER_OK" = "0" ] ; then
+
+# fix up permissions:
+echo ""
+echo "== Setting owner/permissions"
+chown -R ${USER}:${GROUP} ${INSTALLDIR}
+chown -R ${USER}:${GROUP} ${DATA_DIR}
+chown -R ${USER}:${GROUP} ${CONF_DIR}
+
+	if [ -d "/etc/cron.d" ] ; then
+		echo ""
+		echo "== Setting up cron tasks"
+		echo "*/15 * * * * ${USER} ${DEF_LINK_DIR}/ixp-watch >/dev/null 2>&1" | tee /etc/cron.d/ixp-watch-${NETWORK}
+		echo "5 7 * * * ${USER} ${DEF_LINK_DIR}/ixp-watch-tidy > /dev/null 2>&1" | tee /etc/cron.d/ixp-watch-tidy-${NETWORK}
+
+        echo "Note: sample interval is 15 minutes (900 seconds). If you change this in the IXP-Watch config,"
+		echo "remember also to change the cron task /etc/cron.d/ixp-watch."
+
+	fi
+
+else
+
+echo "** Warning: User ${USER} could not be created! You will need to:"
+echo "  - create the user and group for ${USER}"
+echo "  - fix up permissions/ownerships on the directories (see INSTALL.TXT)"
+echo "  - add user to the wireshark group as required"
+echo "  - install cron tasks"
+
+fi
+
+echo "== Setup complete!"
+echo ""
+echo "Further actions:"
+echo "Please read INSTALL.TXT to understand the config options in more detail."
+echo ""
+echo "1. Review the config file ${CONFIG} and edit any further settings as needed"
+echo "2. If you installed arpwatch, you may want to edit the config: /etc/default/arpwatch on debian."
+echo "3. look at the bin/sponge or IXP-Manager/auto_sponge tools."
+echo "4. Edit web pages in ${HTML_DIR} / set up web location."
+echo ""
