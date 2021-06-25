@@ -251,7 +251,7 @@ echo "== Fetching from repository into ${INSTALLDIR}"
 git clone ${REPO_URL} ${INSTALLDIR} || exit 1
 
 echo "== Create user for ixpwatch: ${USER}"
-useradd -c "IXP-Watch User" -d ${DEF_DATA_DIR} -s /bin/bash --no-create-home --system ${USER}
+useradd -c "IXP-Watch" -d ${DEF_DATA_DIR} -s /bin/bash --no-create-home --system ${USER}
 usermod -a -G wireshark ${USER}
 
 echo ""
