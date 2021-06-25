@@ -1,4 +1,19 @@
 #!/bin/bash
+# This file is part of IXP Watch
+#
+# IXP Watch is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, version v2.0 of the License.
+#
+# IXP Watch is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+# for more details.
+#
+# You should have received a copy of the GNU General Public License v2.0
+# along with IXP Watch If not, see:
+#
+# http://www.gnu.org/licenses/gpl-2.0.html
 
 ################################################################################
 #### Local configuration. Things you WILL need to check                        #
@@ -11,8 +26,9 @@ SAMPLE_ROOT=/var/ixpwatch/samples
 LOG_ROOT=/var/ixpwatch/watch
 TEMP_DIR=/var/ixpwatch/tmp
 
+DO_RRD=0                  # Plot RRT?
+RRDTOOL=/usr/bin/rrdtool  # If so, where is RRDtool?
 # Where to put RRD files and HTML files if DO_RRD is enabled:
-
 HTML_DIR=/var/ixpwatch/www
 RRD_DIR=${HTML_DIR}/graphs
 GRAPH_DIR=${HTML_DIR}/graphs
@@ -76,15 +92,15 @@ ENORMOUS_SAMPLE=`expr $MAX_SAMPLE_SIZE \* 25`  # If the file is too enormous, ju
 
 # Disk space usage for disk where samples are stored.
 # (Comment this out to disable auto sample purge based on free disk space)
-DISK_PERCENT_PROG='/bin/df -h --output=pcent /'
+DISK_PERCENT_PROG="/bin/df -h --output=pcent ${SAMPLE_ROOT}"
 DISK_PERCENT_MAX=95   # Max disk use before deleting samples.
-
-DO_RRD=0                  # Plot RRT?
-RRDTOOL=/usr/bin/rrdtool  # If so, where is RRDtool?
 
 # As of 1.14, we try to make the list of dead BGP sessions more helpful by resolving
 # the IP address, rather than just a big list of IP addresses. If you want to use
 # the old format (no resolving), set BGPOPENS_OLD_FORMAT=1.
 BGPOPENS_OLD_FORMAT=0
 
-
+# Options for sponge tool:
+MY_NET="5.57.80.0"  # network base address
+MASK="22"           # network CIDR mask
+SANITY_CHECK="5.57.8" # lock to only allow these addresses to be added.

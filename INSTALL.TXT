@@ -38,14 +38,25 @@ Optional Extras
   - Enable 'sftp' or some other method for obtaining the samples!
   - A dedicated user account that runs IXP Watch from crontab.
 
-The quick way to do this is to just look at the ixp-watch script,
-set the variables, make the required directories, and away you go. 
 
-Or, if you want to understand all the install steps, or if it doesn't 
-work for some reason, read all of this!
+Install script
+==============
+To make installation easier, there is a new (beta) installation script.
+This has been tested on Debian/Ubuntu, but may work on other Linux distros.
 
-Lastly, feel free to contact me.
+wget -O install.sh https://raw.githubusercontent.com/euro-ix/IXP-Watch/master/install/install.sh && sudo bash ./install.sh
 
+What this script does:
+
+- Prompt for various setup/config parameters
+- Create the necessary directories
+- git clone the IXP-Watch repository
+- Copy files into the correct locations
+- For Debian/Ubuntu: install all required packages with apt
+- Create a user and group for ixp-watch, adds it to "wireshark" group
+- Create an initial configuration file (default: /etc/ixpwatch/)
+- Create symlinks into /usr/local/bin
+- Put cron tasks into /etc/cron.d
 
 Getting it working
 ==================
@@ -115,7 +126,9 @@ Getting it working
    Config file may also be specified on the command line with
     -c <filename> e.g. "-c /usr/local/ixpwatch/config_lan_a.sh" to allow
     for multiple instances.
-    
+
+   Copy conf/config.dist to conf/config.sh (or your preferred filename)
+   
    Edit config.sh. You will need to set the variables so that it works correctly 
    in your environment.
 

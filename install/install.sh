@@ -1,22 +1,37 @@
 #!/bin/bash
-
+# This file is part of IXP Watch
+#
+# IXP Watch is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, version v2.0 of the License.
+#
+# IXP Watch is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+# for more details.
+#
+# You should have received a copy of the GNU General Public License v2.0
+# along with IXP Watch If not, see:
+#
+# http://www.gnu.org/licenses/gpl-2.0.html
 
 clear
 
 REPO_URL="https://github.com/euro-ix/IXP-Watch.git"
 
-DEF_INSTALL_DIR="/usr/local/ixpwatch2"
+DEF_INSTALL_DIR="/usr/local/ixpwatch"
 DEF_LINK_DIR="/usr/local/bin"
-DEF_DATA_DIR="/var/ixpwatch2"
+DEF_DATA_DIR="/var/ixpwatch"
 DEF_CONF_DIR="/etc/ixpwatch"
 
+DEF_PREFIX_IPV4="5.57.80.0/22"
 DEF_CAP_INTERFACE="eth1"
 DEF_NETWORK="IXP-LAN"
 
 # install these packages on debian/ubuntu by default:
-DEF_PACKAGES="tshark"
+DEF_PACKAGES="tshark sipcalc"
 
-DEF_USER="ixpwatch2"
+DEF_USER="ixpwatch"
 
 RUNNING_USER=`whoami`
 
@@ -128,6 +143,7 @@ DEF_HTML_DIR="${DATA_DIR}/www"
 
 echo ""
 CAP_INTERFACE=$( get_prompt "Peering LAN capture interface"  ${DEF_CAP_INTERFACE} )
+PREFIX_IPV4=$( get_prompt "Peering LAN IPv4 prefix"  ${DEF_PREFIX_IPV4} )
 NETWORK=$( get_prompt "Name for this peering LAN (1 word)"   ${DEF_NETWORK}       )
 NETWORK=`echo "${NETWORK}" | sed s/[^\.a-zA-Z0-9_\-]//g`
 
@@ -256,6 +272,10 @@ do
 		fi
 done
 
+MY_NET=`echo "${PREFIX_IPV4}" | cut -f1 -d/`
+MASK=`echo "${PREFIX_IPV4}" | cut -f2 -d/`
+SANITY_CHECK=`echo ${MY_NET} | cut -c 1-6 `
+
 echo "== Writing configuration to ${CONFIG}"
 echo "s|^ALARM_EMAIL=.*|ALARM_EMAIL=\'${ALARM_EMAIL}\'|g" | tee /tmp/sed_cmd.$$
 echo "s|^ALARM_PAGER=.*|ALARM_PAGER=\'${ALARM_PAGER}\'|g" | tee -a /tmp/sed_cmd.$$
@@ -268,6 +288,9 @@ echo "s|^TEMP_DIR=.*|TEMP_DIR=${TEMP_DIR}|g" | tee -a /tmp/sed_cmd.$$
 echo "s|^HTML_DIR=.*|HTML_DIR=${HTML_DIR}|g" | tee -a /tmp/sed_cmd.$$
 echo "s|^RRD_DIR=.*|RRD_DIR=${RRD_DIR}|g" | tee -a /tmp/sed_cmd.$$
 echo "s|^GRAPH_DIR=.*|GRAPH_DIR=${GRAPH_DIR}|g" | tee -a /tmp/sed_cmd.$$
+echo "s|^MY_NET=.*|MY_NET=${MY_NET}|g" | tee -a /tmp/sed_cmd.$$
+echo "s|^MASK=.*|MASK=${MASK}|g" | tee -a /tmp/sed_cmd.$$
+echo "s|^SANITY_CHECK=.*|SANITY_CHECK=${SANITY_CHECK}|g" | tee -a /tmp/sed_cmd.$$
 
 sed -f /tmp/sed_cmd.$$ ${INSTALLDIR}/conf/config.dist > ${CONFIG}
 rm -f /tmp/sed_cmd.$$
@@ -288,12 +311,13 @@ echo "== Setting owner/permissions"
 chown -R ${USER}:${GROUP} ${INSTALLDIR}
 chown -R ${USER}:${GROUP} ${DATA_DIR}
 chown -R ${USER}:${GROUP} ${CONF_DIR}
+chmod a+x ${INSTALLDIR}/bin/*
 
 	if [ -d "/etc/cron.d" ] ; then
 		echo ""
 		echo "== Setting up cron tasks"
-		echo "*/15 * * * * ${USER} ${DEF_LINK_DIR}/ixp-watch >/dev/null 2>&1" | tee /etc/cron.d/ixp-watch-${NETWORK}
-		echo "5 7 * * * ${USER} ${DEF_LINK_DIR}/ixp-watch-tidy > /dev/null 2>&1" | tee /etc/cron.d/ixp-watch-tidy-${NETWORK}
+		echo "*/15 * * * * ${USER} ${INSTALLDIR}/bin/ixp-watch >/dev/null 2>&1" | tee /etc/cron.d/ixp-watch
+		echo "5 7 * * * ${USER} ${INSTALLDIR}/bin/ixp-watch-tidy > /dev/null 2>&1" | tee /etc/cron.d/ixp-watch-tidy
 
         echo "Note: sample interval is 15 minutes (900 seconds). If you change this in the IXP-Watch config,"
 		echo "remember also to change the cron task /etc/cron.d/ixp-watch."
@@ -315,8 +339,9 @@ echo ""
 echo "Further actions:"
 echo "Please read INSTALL.TXT to understand the config options in more detail."
 echo ""
-echo "1. Review the config file ${CONFIG} and edit any further settings as needed"
+echo "1. Review the config file ${CONFIG} and edit any further settings as needed."
+echo "    - you may also need to check the ixp-watch script itself."
 echo "2. If you installed arpwatch, you may want to edit the config: /etc/default/arpwatch on debian."
-echo "3. look at the bin/sponge or IXP-Manager/auto_sponge tools."
+echo "3. Set up bin/sponge or IXP-Manager/auto_sponge tools. (optional)"
 echo "4. Edit web pages in ${HTML_DIR} / set up web location."
 echo ""

@@ -40,11 +40,16 @@
 
 ### NOTE: requires the user be able to run the "ip" command
 
-MY_NET="5.57.80.0"  # network base address
-MASK="22"           # network CIDR mask
-INTERFACE="eth1"    # interface to bind IPs to
+# Where is config vars file:
+CONFIG=/etc/ixpwatch/config.sh
 
-SANITY_CHECK="5.57.8" # lock to only allow these addresses to be added.
+if [ ! -f $CONFIG ] ; then
+ echo "Could not open config file $CONFIG!"
+ exit 1
+fi
+
+source $CONFIG
+
 IP_DECIMAL="4294967295"
 
 if [ ! -f /usr/bin/sipcalc ] ; then
@@ -72,7 +77,7 @@ if [ -f /usr/bin/sipcalc ] ; then
 
    if [ ! "$IS_IN_NET" = "$MY_NET" ] ; then
            printf "\b... *** FAILED! *** \n"
-           echo "Bad address: $O_ADDR for interface $INTERFACE: $MY_NET/$MASK"
+           echo "Bad address: $O_ADDR for interface $CAP_INTERFACE: $MY_NET/$MASK"
            echo "Address $O_ADDR wrong mask or subnet: $MY_NET/$MASK"
            echo ""
            exit 1
@@ -85,7 +90,7 @@ fi
  IS_GOOD_ADDR=`echo "$O_ADDR" | grep -c "$SANITY_CHECK"`
  if [ ! "$IS_GOOD_ADDR" = "1" ] ; then
   printf "\b... *** FAILED! *** \n"
-  echo "Bad address: $O_ADDR for interface $INTERFACE: $MY_NET/$MASK"
+  echo "Bad address: $O_ADDR for interface $CAP_INTERFACE: $MY_NET/$MASK"
   echo "Are you adding the sponge to the right server?"
   echo ""
   exit 1
@@ -102,7 +107,7 @@ fi
    fi
  fi 
 
-printf "...OK ($INTERFACE mask $MASK)\n"
+printf "...OK ($CAP_INTERFACE mask $MASK)\n"
 
 ISODATE=`date +%Y-%m-%d`
 
@@ -126,9 +131,9 @@ else
  exit 1
 fi
 
-printf "Adding $O_ADDR to interface $INTERFACE..."
+printf "Adding $O_ADDR to interface $CAP_INTERFACE..."
 
-/sbin/ip addr add $O_ADDR/$MASK dev $INTERFACE
+/sbin/ip addr add $O_ADDR/$MASK dev $CAP_INTERFACE
 
 ADDRESULT="$?"
 
@@ -136,7 +141,7 @@ if [ "$ADDRESULT" = "0" ] ; then
  printf "...Success!\n\n"
 
   if [ ! "$3" = "-APPLY" ] ; then
-   /sbin/ip addr list dev $INTERFACE
+   /sbin/ip addr list dev $CAP_INTERFACE
    echo ""
    echo "$IP_DECIMAL $ISODATE $O_ADDR">>/etc/arpsponges
   fi
@@ -154,15 +159,15 @@ fi # end of add bit!
 if [ "$ACTION" = "apply" ] ; then
 
  # Delete all secondary IP addresses from the interface:
- printf "Deleting all secondary addresses from $INTERFACE matching $SANITY_CHECK..."
- /sbin/ip addr list dev $INTERFACE | grep "inet " | grep $SANITY_CHECK | grep "scope global secondary" | \
-  awk -v interface="$INTERFACE" '{print "/sbin/ip addr del "$2" dev "interface}' | sh
+ printf "Deleting all secondary addresses from $CAP_INTERFACE matching $SANITY_CHECK..."
+ /sbin/ip addr list dev $CAP_INTERFACE | grep "inet " | grep $SANITY_CHECK | grep "scope global secondary" | \
+  awk -v interface="$CAP_INTERFACE" '{print "/sbin/ip addr del "$2" dev "interface}' | sh
  printf "...OK\n"
 
  printf "Adding addresses from /etc/arpsponges:\n\n"
 
  awk -v exec="$0" '{print exec" add "$3" -APPLY"}' /etc/arpsponges | sh
- /sbin/ip addr list dev $INTERFACE
+ /sbin/ip addr list dev $CAP_INTERFACE
 
 fi # end of apply bit
 
@@ -185,7 +190,7 @@ if [ "$ACTION" = "del" ] ; then
 
 printf "Deleting address $O_ADDR..."
 
-/sbin/ip addr del $O_ADDR/$MASK dev $INTERFACE
+/sbin/ip addr del $O_ADDR/$MASK dev $CAP_INTERFACE
 
 DELRESULT="$?"
 
@@ -226,9 +231,9 @@ fi
 
 if [ "$ACTION" = "list" ] ; then
 
-echo ":::: Applied arp sponges on interface $INTERFACE:"
+echo ":::: Applied arp sponges on interface $CAP_INTERFACE:"
 
-awk -v interface="$INTERFACE" '{print "/sbin/ip addr list dev "interface" | grep -w "$3}' /etc/arpsponges | sh
+awk -v interface="$CAP_INTERFACE" '{print "/sbin/ip addr list dev "interface" | grep -w "$3}' /etc/arpsponges | sh
 
 fi
 

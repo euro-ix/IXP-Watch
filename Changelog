@@ -1,3 +1,13 @@
+* 1.15 2021-06-24 - robl
+   - Move example config file location and default location to avoid clash
+     when installing via automation/git.
+  -  Set default config location to /etc/ixpwatch
+   - Make ALARM_PAGER optional.
+   - [Issue #4] Move COUNTSFILE to config, reorder config vars so it works correctly.
+   - Simple install script (works with debian/ubuntu to install from repository)
+   - Make sponge utility use CONFIG file.
+   - Make ixp-watch-tidy utility use CONFIG file.
+
 * 1.14 - 2021-06-23 - robl
   - IPv6 is a thing now. Removed option to disable IPv6 processing.
   - Add report and alert for IPv6 Router Advertisements.

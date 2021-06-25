@@ -38,6 +38,15 @@ sponge tool included. See the directory ./IXP-Manager for example scripts.
 - See the file INSTALL.TXT for more installation details.
 - INTRO.TXT provides more background info on the original ixpwatch tool
 
+# Install Script
+
+To make installation easier, there is a new (beta) installation script.
+This has been tested on Debian/Ubuntu, but may work on other Linux distros.
+
+wget -O install.sh https://raw.githubusercontent.com/euro-ix/IXP-Watch/master/install/install.sh && sudo bash ./install.sh
+
+(See INSTALL.TXT for details on what this does/does not do.)
+
 # Manual Installation (Debuan/Ubuntu)
 
 - Install dependencies:     apt-get install sipcalc jq wget tshark rrdtool
