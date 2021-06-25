@@ -21,7 +21,7 @@
 ################################################################################
 
 # Where is config vars file:
-CONFIG=/usr/local/ixpwatch/config.sh
+CONFIG=/etc/ixpwatch/config.sh
 
 # Config file can also be specified from the command line with -c <filename>:
 optstring=":c:"
@@ -129,13 +129,6 @@ FILEDATE=`date "+%Y-%m-%d-%H-%M"`  # Use as basis for file name. Do not change.
 STARTDATE=`date "+%Y-%m-%d %H:%M"` # Date used in reports. Adjust to taste.
 
 LOGFILE=$TEMP_DIR/ixp-watch.log
-
-# Where to write stats counts to, (if enabled)
-# If you use my format, make sure what you've got in $NETWORK won't break
-# the filename (no "/ | or nasty chars or spaces etc.)
-# You don't _have_ to use this filename though :-)
-
-COUNTSFILE=$TEMP_DIR/ixp-watch.$NETWORK.counts
 
 # You may need to check SAMPLESIZE below in this script, if your ls -la
 # output is not the usual format. (Works on debian and other linux okay)
@@ -624,7 +617,10 @@ fi
 
 
 if [ -f $TEMP_DIR/alarms_stp.tmp ] ; then
- $MAILPROG -s "[$NETWORK] Spanning Tree Alarm - Please investigate" $ALARM_PAGER < $TEMP_DIR/alarms_stp.tmp
+
+  if [ -n "$ALARM_PAGER"] ; then
+    $MAILPROG -s "[$NETWORK] Spanning Tree Alarm - Please investigate" $ALARM_PAGER < $TEMP_DIR/alarms_stp.tmp
+  fi
  $TSHARK -n -r $SAMPLEDIR/$FILEDATE -Y stp >> $TEMP_DIR/alarms_stp.tmp
  $MAILPROG -s "[$NETWORK] Spanning Tree Alarm - Please investigate" $ALARM_EMAIL < $TEMP_DIR/alarms_stp.tmp
  rm $TEMP_DIR/alarms_stp.tmp
@@ -639,7 +635,9 @@ if [ $NUM_ARPS_MIN -ge $ARP_WARNLEVEL ] ; then
 echo "ARPS Per min is $NUM_ARPS_MIN" > $LOG_ROOT/alarms_arp.tmp
 
   if [ ! -f $LOG_ROOT/arpstorm.warn ] ; then
-   $MAILPROG -s "[$NETWORK] High number of ARPS in progress - Please investigate" $ALARM_PAGER < $LOG_ROOT/alarms_arp.tmp
+   if [ -n "$ALARM_PAGER"] ; then
+     $MAILPROG -s "[$NETWORK] High number of ARPS in progress - Please investigate" $ALARM_PAGER < $LOG_ROOT/alarms_arp.tmp
+   fi
 
    echo "" >> $LOG_ROOT/alarms_arp.tmp
    cat $LOGDIR/$FILEDATE.TXT >> $LOG_ROOT/alarms_arp.tmp

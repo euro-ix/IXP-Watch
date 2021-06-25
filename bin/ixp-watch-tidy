@@ -30,7 +30,7 @@
 # filling up on the host machine!
 
 # Where is config vars file:
-CONFIG=/usr/local/ixpwatch/config.sh
+CONFIG=/etc/ixpwatch/config.sh
 
 # Config file can also be specified from the command line with -c <filename>:
 optstring=":c:"
