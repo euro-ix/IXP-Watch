@@ -1,3 +1,6 @@
+* 1.15.1 2021-07-06 - robl
+   - Bugfix: Exit after sample file size exceeds MAX_SAMPLE_SIZE.
+   
 * 1.15 2021-06-24 - robl
    - Move example config file location and default location to avoid clash
      when installing via automation/git.

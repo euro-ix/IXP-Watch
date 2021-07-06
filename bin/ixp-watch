@@ -1,5 +1,5 @@
 #!/bin/bash
-# ixp-watch version: 1.14
+# ixp-watch version: 1.15
 # This file is part of IXP Watch
 #
 # IXP Watch is free software: you can redistribute it and/or modify it
@@ -261,6 +261,8 @@ if [ $SAMPLESIZE -ge $MAX_SAMPLE_SIZE ] ; then
 
  $MAILPROG -s "[$NETWORK] Garbage or flooded traffic detected" $ALARM_EMAIL < $TEMP_DIR/err.$$
  rm $TEMP_DIR/err.$$
+
+ exit 1
 
 fi
 
