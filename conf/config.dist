@@ -100,7 +100,32 @@ DISK_PERCENT_MAX=95   # Max disk use before deleting samples.
 # the old format (no resolving), set BGPOPENS_OLD_FORMAT=1.
 BGPOPENS_OLD_FORMAT=0
 
-# Options for sponge tool:
+#
+# Optional tools settings (sponge, auto_sponge, update_ethers)
+#
 MY_NET="5.57.80.0"  # network base address
 MASK="22"           # network CIDR mask
 SANITY_CHECK="5.57.8" # lock to only allow these addresses to be added.
+
+# Where to get sponge list: (auto_sponge tool for IXP Manager)
+URL_ARPSPONGE="https://<your_ixpmanager_server>/cgi-bin/json_arpsponges"
+
+# Auto-sponge / update_ethers
+JQ="/usr/bin/jq"       # Where is jq (for JSON) auto_sponge / update_ethers
+COMM="/usr/bin/comm"   # comm cmd auto_sponge
+
+WGET="/usr/bin/wget"   # Where is wget/curl
+WGET_OPTS="-qO -"      # wget opts to get to stdout
+
+# If using curl instead:
+# WGET="/usr/bin/curl"   # Where is wget/curl
+# WGET_OPTS="-o -"       # wget opts to get to stdout
+
+SIPCALC="/usr/bin/sipcalc" # sipcalc
+IP="/sbin/ip"              # ip cmd
+NETSTAT=`which netstat`    # netstat cmd
+
+# Update_ethers tool
+# Where to get mac address list: (update_ethers tool for IXP Manager)
+URL_ETHERS="https://<your_ixpmanager_server>/cgi-bin/json_ethers"
+# ETHERSFILE=/etc/ethers

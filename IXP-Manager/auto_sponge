@@ -51,28 +51,37 @@
 # ----------------------------------------------------------------------
 # CONFIG VARS
 # ----------------------------------------------------------------------
-
-MY_NET="5.57.80.0"    # network base address
-MASK="22"             # network CIDR mask
-INTERFACE="eth1"      # interface to bind IPs to
-# INTERFACE=`/usr/bin/netstat -arn | grep -w ^${MY_NET} | awk '{print $8}'`
-
-JQ="/usr/bin/jq"           # Where is jq (for JSON)
-COMM="/usr/bin/comm"       # comm cmd
-WGET="/usr/bin/wget"       # Where is wget/curl
-WGET_OPTS="-qO -"          # wget opts to get to stdout
-SIPCALC="/usr/bin/sipcalc" # sipcalc
-IP="/sbin/ip"              # ip cmd
-NETSTAT=`which netstat`    # netstat cmd
-
-# Where to get sponge list: 
-URL="https://<your_ixpmanager_server>/cgi-bin/json_arpsponges"
+# Defaults: override in CONFIG file if needed
+SHOW_OUTPUT=1         # Show normal output (configure what to do in do_msg)
+                      # If set to 0, only errors will be output.
+# ----------------------------------------------------------------------
+# Where is config vars file:
+CONFIG=/etc/ixpwatch/config.sh
 
 ARPSPONGES="/tmp/arpsponges.$$"
 ARPDIFF="/tmp/arpsponge.$$"
 
-SHOW_OUTPUT=1         # Show normal output (configure what to do in do_msg)
-                      # If set to 0, only errors will be output.        
+# Config file can also be specified from the command line with -c <filename> [opts]
+optstring=":c:"
+
+while getopts ${optstring} arg; do
+  case "${arg}" in
+    c)
+            # Set config file:
+            CONFIG=${OPTARG}
+            shift
+    ;;
+  esac
+  shift
+done
+
+
+if [ ! -f $CONFIG ] ; then
+ echo "Could not open config file $CONFIG!"
+ exit 1
+fi
+
+source $CONFIG
 # ----------------------------------------------------------------------
 
 # What to do with error messages:
@@ -113,9 +122,9 @@ if [ ! -x "$SIPCALC" ] ; then do_suberror "WARNING: sipcalc not found! No subnet
 get_json () {
   local ret=0
   GET=$1
-  REQUEST=`${WGET} ${WGET_OPTS} ${URL}${GET}`
+  REQUEST=`${WGET} ${WGET_OPTS} ${URL_ARPSPONGE}${GET}`
   ret=$?
-  if [ $? != 0 ] ; then do_error "ERROR: failed to get JSON: ${WGET} ${WGET_OPTS} ${URL}${GET}"; ret=1; fi
+  if [ $? != 0 ] ; then do_error "ERROR: failed to get JSON: ${WGET} ${WGET_OPTS} ${URL_ARPSPONGE}${GET}"; ret=1; fi
   echo "${REQUEST}"
   return $ret
 }
@@ -136,7 +145,7 @@ get_spongelist () {
 # get list of secondary IPs applied to interface
 get_boundlist () {
    local ret=0;
-   local boundlist=`${IP} addr show dev ${INTERFACE} to ${MY_NET}/${MASK} scope global secondary | grep inet | awk '{print $2}' | cut -d/ -f1 | sort -t . -k 3,3n -k 4,4n`
+   local boundlist=`${IP} addr show dev ${CAP_INTERFACE} to ${MY_NET}/${MASK} scope global secondary | grep inet | awk '{print $2}' | cut -d/ -f1 | sort -t . -k 3,3n -k 4,4n`
    ret=$?
 
    echo "$boundlist"
@@ -157,15 +166,15 @@ do_ip_add () {
      if [ -x "${SIPCALC}" ] ; then
        IS_IN_NET=`${SIPCALC} $O_ADDR/$MASK | grep "^Network address" | awk -F"- " '{print $2}'`
        if [ ! "$IS_IN_NET" = "$MY_NET" ] ; then
-           do_suberror "Bad address: $O_ADDR for interface $interface: $MY_NET/$mask, Address $O_ADDR wrong mask or subnet: $MY_NET/$MASK"
+           do_suberror "do_ip_add: $O_ADDR not in subnet for interface: ${CAP_INTERFACE} (${MY_NET}/${MASK})"
            ret=1
        fi
      fi
 
    # Check if address is already bound:
-   IS_ALREADY_SPONGED=`${IP} addr show dev ${INTERFACE} to ${MY_NET}/${MASK} scope global secondary | grep inet | grep -cw "$O_ADDR"`
+   IS_ALREADY_SPONGED=`${IP} addr show dev ${CAP_INTERFACE} to ${MY_NET}/${MASK} scope global secondary | grep inet | grep -cw "$O_ADDR"`
     if [ "$IS_ALREADY_SPONGED" = "1" ] ; then
-     do_suberror "do_ip_add: $O_ADDR is already bound to interface ${INTERFACE}. No action taken."
+     do_suberror "do_ip_add: $O_ADDR is already bound to interface ${CAP_INTERFACE}. No action taken."
      ret=1
      return $ret
     fi
@@ -188,13 +197,13 @@ do_ip_add () {
     return $PINGRESULT
    fi
 
-  ${IP} addr add $O_ADDR/$MASK dev $INTERFACE
+  ${IP} addr add $O_ADDR/$MASK dev $CAP_INTERFACE
   ADDRESULT="$?"
 
   if [ "$ADDRESULT" = "0" ] ; then
-   do_msg "Sponged IP ${O_ADDR} added to interface ${INTERFACE}"
+   do_msg "Sponged IP ${O_ADDR} added to interface ${CAP_INTERFACE}"
   else
-   do_error "FAILED - IP addr add command failed for some reason: ${IP} addr add $O_ADDR/$MASK dev $INTERFACE"
+   do_error "FAILED - IP addr add command failed for some reason: ${IP} addr add $O_ADDR/$MASK dev $CAP_INTERFACE"
    return $ADDRESULT
   fi
 
@@ -210,18 +219,18 @@ do_ip_del () {
   O_ADDR=`echo $address | cut -d/ -f1`
 
    # Check if address is already bound:
-   IS_ALREADY_SPONGED=`${IP} addr show dev ${INTERFACE} to ${MY_NET}/${MASK} scope global secondary | grep inet | grep -cw "$O_ADDR"`
+   IS_ALREADY_SPONGED=`${IP} addr show dev ${CAP_INTERFACE} to ${MY_NET}/${MASK} scope global secondary | grep inet | grep -cw "$O_ADDR"`
     if [ ! "$IS_ALREADY_SPONGED" = "1" ] ; then
-     do_suberror "do_ip_del: $O_ADDR is not bound to interface ${INTERFACE}. No action taken."
+     do_suberror "do_ip_del: $O_ADDR is not bound to interface ${CAP_INTERFACE}. No action taken."
      ret=1
      return $ret
     fi
 
-   ${IP} addr del $O_ADDR/$MASK dev $INTERFACE
+   ${IP} addr del $O_ADDR/$MASK dev $CAP_INTERFACE
    DELRESULT="$?"
 
   if [ "$DELRESULT" = "0" ] ; then
-   do_msg "Sponged IP ${O_ADDR} removed from interface ${INTERFACE}"
+   do_msg "Sponged IP ${O_ADDR} removed from interface ${CAP_INTERFACE}"
   else
    do_error "FAILED - IP addr del command failed for some reason!"
    ret=1
@@ -235,10 +244,10 @@ do_ip_del () {
 ACTION=`echo "$1" | sed s/\^-//g | tr [A-Z] [a-z]`
 
 # Check interface:
-INT_CHECK=`${NETSTAT} -arn | grep -w ^${MY_NET} | grep -wc ${INTERFACE} || INT_CHECK=0`
+INT_CHECK=`${NETSTAT} -arn | grep -w ^${MY_NET} | grep -wc ${CAP_INTERFACE} || INT_CHECK=0`
 
 if [ "$INT_CHECK" = "0" ] ; then
-   do_error "ERROR: interface ${INTERFACE} is down, not found or not configured for network ${MY_NET}"
+   do_error "ERROR: interface ${CAP_INTERFACE} is down, not found or not configured for network ${MY_NET}"
    exit 1
 fi
 
@@ -277,8 +286,8 @@ fi
 
 if [ "$ACTION" = "stop" ] ; then
 
-${IP} addr show dev ${INTERFACE} to ${MY_NET}/${MASK} scope global secondary | grep inet | awk '{print $2}' | \
-	 awk -v interface="$INTERFACE" -v ip="$IP" '{print ip " addr del "$1" dev "interface}' | sh
+${IP} addr show dev ${CAP_INTERFACE} to ${MY_NET}/${MASK} scope global secondary | grep inet | awk '{print $2}' | \
+	 awk -v interface="$CAP_INTERFACE" -v ip="$IP" '{print ip " addr del "$1" dev "interface}' | sh
 
 fi # end of stop bit
 
@@ -321,7 +330,7 @@ RED=$'\e[1;31m'
 GREEN=$'\e[1;32m'
 UNSET=$'\e[0m'
 
-  echo "$GREEN:::: Applied arp sponges on interface $INTERFACE:"
+  echo "$GREEN:::: Applied arp sponges on interface $CAP_INTERFACE:"
 
   # get list of secondary IPs currently bound to interface:
   BOUNDLIST=$(get_boundlist)
@@ -339,14 +348,14 @@ UNSET=$'\e[0m'
   # check for listed but not bound:
   LISTED_BUT_NOT_BOUND=`cat ${ARPDIFF} | cut -f1 | ${COMM} -13 --nocheck-order ${ARPSPONGES} -`
   if [ ! ${#LISTED_BUT_NOT_BOUND} = 0 ] ; then
-  echo "$RED:::: WARNING: The following IPs are listed as sponged but are NOT bound to $INTERFACE:"
+  echo "$RED:::: WARNING: The following IPs are listed as sponged but are NOT bound to $CAP_INTERFACE:"
   cat ${ARPDIFF} | cut -f1 | ${COMM} -13 --nocheck-order ${ARPSPONGES} - | xargs -I '{}' grep -w "^{}" ${ARPDIFF}
   fi
 
   # check for bound but not listed:
   BOUND_BUT_NOT_LISTED=`cat ${ARPDIFF} | cut -f1 | ${COMM} -23 --nocheck-order ${ARPSPONGES} -`
   if [ ! ${#BOUND_BUT_NOT_LISTED} = 0 ] ; then
-  echo "$RED:::: WARNING: The following IPs are bound to $INTERFACE but NOT listed as sponged:"
+  echo "$RED:::: WARNING: The following IPs are bound to $CAP_INTERFACE but NOT listed as sponged:"
   cat ${ARPDIFF} | cut -f1 | ${COMM} -23 --nocheck-order ${ARPSPONGES} -
   fi
 
@@ -359,4 +368,3 @@ fi
 # Clean up temp files:
 if [ -f "${ARPDIFF}" ]    ; then rm ${ARPDIFF}    ;  fi
 if [ -f "${ARPSPONGES}" ] ; then rm ${ARPSPONGES} ;  fi
-

@@ -43,6 +43,21 @@
 # Where is config vars file:
 CONFIG=/etc/ixpwatch/config.sh
 
+# Config file can also be specified from the command line with -c <filename> [opts]
+optstring=":c:"
+
+while getopts ${optstring} arg; do
+  case "${arg}" in
+    c)
+            # Set config file:
+            CONFIG=${OPTARG}
+            shift
+    ;;
+  esac
+  shift
+done
+
+
 if [ ! -f $CONFIG ] ; then
  echo "Could not open config file $CONFIG!"
  exit 1
@@ -50,9 +65,10 @@ fi
 
 source $CONFIG
 
+
 IP_DECIMAL="4294967295"
 
-if [ ! -f /usr/bin/sipcalc ] ; then
+if [ ! -f "$SIPCALC" ] ; then
 	echo "WARNING: sipcalc not found! No subnet check will be performed!"
 fi
 
@@ -71,9 +87,9 @@ O_ADDR=`echo $2 | cut -d/ -f1`
 echo ""
 printf "Checking address $O_ADDR..."
 
-if [ -f /usr/bin/sipcalc ] ; then
+if [ -f "$SIPCALC" ] ; then
 
-   IS_IN_NET=`/usr/bin/sipcalc $O_ADDR/$MASK | grep "^Network address" | awk -F"- " '{print $2}'`
+   IS_IN_NET=`$SIPCALC $O_ADDR/$MASK | grep "^Network address" | awk -F"- " '{print $2}'`
 
    if [ ! "$IS_IN_NET" = "$MY_NET" ] ; then
            printf "\b... *** FAILED! *** \n"
@@ -83,7 +99,7 @@ if [ -f /usr/bin/sipcalc ] ; then
            exit 1
    fi
 
-   IP_DECIMAL=`/usr/bin/sipcalc $O_ADDR | grep "(decimal)" | cut -f2 -d'-' | sed s/\ //g`
+   IP_DECIMAL=`$SIPCALC $O_ADDR | grep "(decimal)" | cut -f2 -d'-' | sed s/\ //g`
 
 fi
 
@@ -133,7 +149,7 @@ fi
 
 printf "Adding $O_ADDR to interface $CAP_INTERFACE..."
 
-/sbin/ip addr add $O_ADDR/$MASK dev $CAP_INTERFACE
+$IP addr add $O_ADDR/$MASK dev $CAP_INTERFACE
 
 ADDRESULT="$?"
 
@@ -141,7 +157,7 @@ if [ "$ADDRESULT" = "0" ] ; then
  printf "...Success!\n\n"
 
   if [ ! "$3" = "-APPLY" ] ; then
-   /sbin/ip addr list dev $CAP_INTERFACE
+   $IP addr list dev $CAP_INTERFACE
    echo ""
    echo "$IP_DECIMAL $ISODATE $O_ADDR">>/etc/arpsponges
   fi
@@ -160,7 +176,7 @@ if [ "$ACTION" = "apply" ] ; then
 
  # Delete all secondary IP addresses from the interface:
  printf "Deleting all secondary addresses from $CAP_INTERFACE matching $SANITY_CHECK..."
- /sbin/ip addr list dev $CAP_INTERFACE | grep "inet " | grep $SANITY_CHECK | grep "scope global secondary" | \
+ $IP addr list dev $CAP_INTERFACE | grep "inet " | grep $SANITY_CHECK | grep "scope global secondary" | \
   awk -v interface="$CAP_INTERFACE" '{print "/sbin/ip addr del "$2" dev "interface}' | sh
  printf "...OK\n"
 
@@ -190,7 +206,7 @@ if [ "$ACTION" = "del" ] ; then
 
 printf "Deleting address $O_ADDR..."
 
-/sbin/ip addr del $O_ADDR/$MASK dev $CAP_INTERFACE
+$IP addr del $O_ADDR/$MASK dev $CAP_INTERFACE
 
 DELRESULT="$?"
 
