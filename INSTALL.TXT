@@ -16,10 +16,10 @@ Prerequisites:
      peering LAN for some of the layer 3 reporting to work.
   - Disk space for sample files. I allow at least 10Gig, but this is because
     I want to store a few months of samples.
-      The sample files here take up about 8Mb per day based on 15 Minute
+      The sample files here take up about 8 MB per day based on 15 minute
       sampling (running IXP Watch every 15 minutes for 15 minutes)
       However, during storms or other flooded traffic, these files grow.
-      The largest individual sample file I've got is 430Mb.
+      The largest individual sample file I've got is 430 MB.
      (ixp-watch has some facility to manage large files to avoid disks filling up.)
   - syslogd or logging facility if you want to syslog the traffic alarms etc.
   - and, of course, the bash shell.
