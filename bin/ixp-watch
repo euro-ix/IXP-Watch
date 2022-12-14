@@ -105,21 +105,21 @@ function do_alert()
 
  if [ -n "$inc_file" ] && [ -f "$inc_file" ] ; then
    local syslog_msg="-f $inc_file"
-   local pager_msg="head -1 $inc_file"
-   local email_msg="cat $inc_file"
+   local pager_msg=$(head -1 $inc_file)
+   local email_msg=$(cat $inc_file)
  fi
 
  ### PAGER ALERTS ############################################################
  
   if [ -n "$ALARM_PAGER" ] && [ "$level" = "CRITICAL" ] ; then
-    echo $pager_msg | $MAILPROG -s "[$NETWORK] $level: $text" $ALARM_PAGER
+    echo "$pager_msg" | $MAILPROG -s "[$NETWORK] $level: $text" $ALARM_PAGER
     if [ $? != 0 ] ; then echo "WARN: $MAILPROG failed for ALARM_PAGER $ALARM_PAGER" >&2 ; fi
   fi
 
  ### EMAIL ALERTS ############################################################
 
   if [ -n "$ALARM_EMAIL" ] ; then
-    echo $email_msg | $MAILPROG -s "[$NETWORK] $level: $text" $ALARM_EMAIL
+    echo "$email_msg" | $MAILPROG -s "[$NETWORK] $level: $text" $ALARM_EMAIL
     if [ $? != 0 ] ; then echo "WARN: $MAILPROG failed for ALARM_EMAIL $ALARM_EMAIL" >&2 ; fi
   fi
 
