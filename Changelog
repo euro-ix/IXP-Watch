@@ -1,3 +1,21 @@
+* 1.16 2022-12-14 - robl
+   - Move things to functions to avoid repeated code in many places.
+    - Error handling / alerting is now more consistent
+    - do_alert: Handle all alerts/emails/log output in function
+    - log_error: Handle all error output logs in function
+    - check_errors: Handle checking for log_error logs
+    - die/cleanup/cleanexit: Clean up on exit, trap CTRL-C
+    - required_vars: Check all variables required for proper operation are set before continuing
+    - create_report/report/report_header/report_section_file - For building reports
+    - do_graph: create and update rrd graphs
+   - do_alert: Add slack alerter
+   - Make path to logger prog config variable.
+   - Configure syslog options in install script
+   - Better error handling if called programs return non-zero
+   - Check we can execute tshark before starting capture
+   - Log stderror output from tshark capture if it fails to run correctly
+   - Replace backticks with newer $(command) syntax
+
 * 1.15.1 2021-07-06 - robl
    - Bugfix: Exit after sample file size exceeds MAX_SAMPLE_SIZE.
    - Move more options to config file

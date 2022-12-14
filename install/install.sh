@@ -24,6 +24,12 @@ DEF_LINK_DIR="/usr/local/bin"
 DEF_DATA_DIR="/var/ixpwatch"
 DEF_CONF_DIR="/etc/ixpwatch"
 
+DEF_LOGGER="/usr/bin/logger"
+DEF_LOGHOSTS="192.168.100.10 192.168.200.20"
+
+DEF_LOCAL_FACIL="local4.debug"
+DEF_LOG_FACILITY="local4.debug"
+
 DEF_PREFIX_IPV4="5.57.80.0/22"
 DEF_CAP_INTERFACE="eth1"
 DEF_NETWORK="IXP-LAN"
@@ -33,7 +39,7 @@ DEF_PACKAGES="tshark sipcalc"
 
 DEF_USER="ixpwatch"
 
-RUNNING_USER=`whoami`
+RUNNING_USER=$(whoami)
 
 echo "IXP-Watch Install Script"
 echo "========================"
@@ -52,14 +58,14 @@ if [ $RUNNING_USER != "root" ] ; then
 fi
 
 if [ -f /etc/debian_version ] ; then
- DEBIAN=`cat /etc/debian_version`
+ DEBIAN=$(cat /etc/debian_version)
  echo "** Debian/Ubuntu $DEBIAN found. Will ask to install apt packages."
 else
  echo "** Not Debian / Ubuntu. You may need to install extra packages for tshark, rrdtool etc."
 fi
 echo ""
 
-GIT=`which git`
+GIT=$(which git)
 
 if [ -z "$GIT" ] ; then
 
@@ -145,7 +151,7 @@ echo ""
 CAP_INTERFACE=$( get_prompt "Peering LAN capture interface"  ${DEF_CAP_INTERFACE} )
 PREFIX_IPV4=$( get_prompt "Peering LAN IPv4 prefix"  ${DEF_PREFIX_IPV4} )
 NETWORK=$( get_prompt "Name for this peering LAN (1 word)"   ${DEF_NETWORK}       )
-NETWORK=`echo "${NETWORK}" | sed s/[^\.a-zA-Z0-9_\-]//g`
+NETWORK=$(echo "${NETWORK}" | sed s/[^\.a-zA-Z0-9_\-]//g)
 
 echo ""
 CONFIG=$( get_prompt "Config file (will be created)"       ${CONF_DIR}/${NETWORK}.conf )
@@ -165,6 +171,33 @@ echo ""
 
 ALARM_EMAIL=$( get_prompt "Email for alerts"  ${USER} )
 ALARM_PAGER=$( get_prompt "Email for SMS/urgent alerts" ${ALARM_EMAIL} )
+
+echo ""
+echo "SYSLOG settings"
+echo "==============="
+echo ""
+echo "IXP-Watch supports local and/or remote syslog"
+echo ""
+
+LOGGER=$( get_prompt "Location of logger" ${DEF_LOGGER} )
+
+DO_LOCAL_SYSLOG=$( yes_or_no "Enable syslog to LOCAL host? [yes]" y) ; echo ""
+
+if [ $DO_LOCAL_SYSLOG = 1 ] ; then
+
+ LOCAL_FACIL=$( get_prompt "- LOCAL Syslog facility"  "${DEF_LOCAL_FACIL}" )
+
+fi
+
+DO_REMOTE_SYSLOG=$( yes_or_no "Enable syslog to REMOTE host(s)? [yes]" y) ; echo ""
+
+if [ $DO_REMOTE_SYSLOG = 1 ] ; then
+
+ LOG_FACILITY=$( get_prompt "- REMOTE Syslog facility"  "${DEF_LOG_FACILITY}" )
+ LOGHOSTS=$( get_prompt "- REMOTE Syslog host(s)"       "${DEF_LOGHOSTS}" )
+
+fi
+
 
 echo ""
 echo "Optional extras"
@@ -238,7 +271,7 @@ if [ -n "$DEBIAN" ] ; then
   done
 fi
 
-GIT=`which git`
+GIT=$(which git)
 if [ -z "$GIT" ] ; then
  echo "** git not found! please install to continue!"
  echo ""
@@ -272,9 +305,9 @@ do
 		fi
 done
 
-MY_NET=`echo "${PREFIX_IPV4}" | cut -f1 -d/`
-MASK=`echo "${PREFIX_IPV4}" | cut -f2 -d/`
-SANITY_CHECK=`echo ${MY_NET} | cut -c 1-6 `
+MY_NET=$(echo "${PREFIX_IPV4}" | cut -f1 -d/)
+MASK=$(echo "${PREFIX_IPV4}" | cut -f2 -d/)
+SANITY_CHECK=$(echo ${MY_NET} | cut -c 1-6 )
 
 echo "== Writing configuration to ${CONFIG}"
 echo "s|^ALARM_EMAIL=.*|ALARM_EMAIL=\'${ALARM_EMAIL}\'|g" | tee /tmp/sed_cmd.$$
@@ -291,6 +324,18 @@ echo "s|^GRAPH_DIR=.*|GRAPH_DIR=${GRAPH_DIR}|g" | tee -a /tmp/sed_cmd.$$
 echo "s|^MY_NET=.*|MY_NET=${MY_NET}|g" | tee -a /tmp/sed_cmd.$$
 echo "s|^MASK=.*|MASK=${MASK}|g" | tee -a /tmp/sed_cmd.$$
 echo "s|^SANITY_CHECK=.*|SANITY_CHECK=${SANITY_CHECK}|g" | tee -a /tmp/sed_cmd.$$
+echo "s|^LOGGER=.*|LOGGER=${LOGGER}|g" | tee -a /tmp/sed_cmd.$$
+
+if [ $DO_LOCAL_SYSLOG = 1 ] ; then
+ echo "s|^# LOCAL_FACIL=.*|LOCAL_FACIL=${LOCAL_FACIL}|g" | tee -a /tmp/sed_cmd.$$
+fi
+
+if [ $DO_REMOTE_SYSLOG = 1 ] ; then
+
+ echo "s|^# LOGHOSTS=.*|LOGHOSTS=\'${LOGHOSTS}\'|g" | tee -a /tmp/sed_cmd.$$
+ echo "s|^LOG_FACILITY=.*|LOG_FACILITY=${LOG_FACILITY}|g" | tee -a /tmp/sed_cmd.$$
+
+fi
 
 sed -f /tmp/sed_cmd.$$ ${INSTALLDIR}/conf/config.dist > ${CONFIG}
 rm -f /tmp/sed_cmd.$$

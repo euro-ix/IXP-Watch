@@ -34,11 +34,14 @@ RRD_DIR=${HTML_DIR}/graphs
 GRAPH_DIR=${HTML_DIR}/graphs
 
 # Where to find tshark:
-# (I'm going to trust this as correct.)
 TSHARK=/usr/bin/tshark
 
 MAILPROG=/usr/bin/mail   # command to send e-mails
 # (redhat this is /bin/mail by default)
+
+# Slack alerter script. Uncomment to enable:
+# SLACK_ALERTER=/usr/local/bin/slack_alerter
+# SLACK_ALERTER_OPTS='-u ixpwatch -c '#ixpwatch''
 
 GZIP='nice -n 10 /bin/gzip'       # Location of gzip prog
 
@@ -56,19 +59,18 @@ SAMPLE_TIME=900           # Capture time in seconds (default 15 minutes)
 
 NETWORK='YOUR_NETWORK_HERE'   # Network Name. - some name
 
-# Local syslog facility. Leave blank to turn off.
-# (facility must be set up in your syslog.conf of course.)
-LOCAL_FACIL=local4.debug
+LOCAL_FACIL=local4.debug  # LOCAL syslog facility. Leave blank to turn off.
 
+LOGGER=/usr/bin/logger    # syslog command
 
-# Remote syslog option. Comment out to disable it.
-LOGHOST=                  # optional syslog host to send alerts to
-                          # leave blank to log locally instead.
-                          # Check the below "/usr/bin/logger" commands to ensure
-                          # You are using "-n" or "-h" accordingly for Linux or BSD.
+# Optional syslog hosts to send alerts to
+# Check the /usr/bin/logger commands to ensure
+# You are using "-n" or "-h" accordingly for Linux or BSD.
 
-LOG_FACILITY=local4.debug # Facility to send logs to
-                          # leave both blank to not log anywhere.
+# Uncomment to enable: 
+# LOGHOSTS="192.168.100.10 192.168.200.20"
+
+LOG_FACILITY=local4.debug # Facility to send REMOTE syslog logs to
 
 ARP_WARNLEVEL=4000        # Alert when number of ARPS Per Minute reaches this.
                           # You may not know this now, but you can use the reports
@@ -83,12 +85,11 @@ WRITE_COUNTS=0            # Write counts to /tmp/ixpwatch.$NETWORK.counts?
 # Where to write stats counts to, (if enabled)
 # If you use my format, make sure what you've got in $NETWORK won't break
 # the filename (no "/ | or nasty chars or spaces etc.)
-# You don't _have_ to use this filename though :-)
 COUNTSFILE=$TEMP_DIR/ixp-watch.$NETWORK.counts
 
 MAX_SAMPLE_SIZE=52428800  # Maximum sensible file size to try and process (50M)
 
-ENORMOUS_SAMPLE=`expr $MAX_SAMPLE_SIZE \* 25`  # If the file is too enormous, just delete it.
+ENORMOUS_SAMPLE=$(( $MAX_SAMPLE_SIZE \* 25 ))  # If the file is too enormous, just delete it.
 
 # Disk space usage for disk where samples are stored.
 # (Comment this out to disable auto sample purge based on free disk space)
@@ -98,7 +99,7 @@ DISK_PERCENT_MAX=95   # Max disk use before deleting samples.
 # As of 1.14, we try to make the list of dead BGP sessions more helpful by resolving
 # the IP address, rather than just a big list of IP addresses. If you want to use
 # the old format (no resolving), set BGPOPENS_OLD_FORMAT=1.
-BGPOPENS_OLD_FORMAT=0
+BGPOPENS_OLD_FORMAT=1
 
 #
 # Optional tools settings (sponge, auto_sponge, update_ethers)
@@ -123,9 +124,12 @@ WGET_OPTS="-qO -"      # wget opts to get to stdout
 
 SIPCALC="/usr/bin/sipcalc" # sipcalc
 IP="/sbin/ip"              # ip cmd
-NETSTAT=`which netstat`    # netstat cmd
+NETSTAT=$(which netstat)    # netstat cmd
 
 # Update_ethers tool
 # Where to get mac address list: (update_ethers tool for IXP Manager)
 URL_ETHERS="https://<your_ixpmanager_server>/cgi-bin/json_ethers"
 # ETHERSFILE=/etc/ethers
+
+# URL to include in alerts (email/slack)
+URL_ALERTS="https://<your_ixpwatch_server>/ixpwatch/report_1.shtml"

@@ -60,7 +60,7 @@ umask 002
 # get updated ethers from IXP Manager:
 $WGET $WGET_OPTS $URL_ETHERS | $JQ -r '.ethers[] | [.mac,.ethersdesc] | @tsv' > ${TMPFILE}
 
-  COUNTLINES=`grep -c "__" ${TMPFILE}`
+  COUNTLINES=$(grep -c "__" ${TMPFILE})
 
    if [ $COUNTLINES -lt 20 ] ; then
      echo "Hmm. file for ${ETHERSFILE} seems a bit short to me. Not using." >&2

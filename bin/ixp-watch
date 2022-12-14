@@ -1,5 +1,5 @@
 #!/bin/bash
-# ixp-watch version: 1.15.1
+# ixp-watch version: 1.16
 # This file is part of IXP Watch
 #
 # IXP Watch is free software: you can redistribute it and/or modify it
@@ -35,13 +35,171 @@ while getopts ${optstring} arg; do
   esac
 done
 
+function die()
+{
+    printf '%s\n' "$1" >&2
+    exit 1
+}
+
+function required_vars()
+{
+
+ local vars=$1
+ local ndef
+
+ for var in $vars; do
+         if [ -z "${!var}" ] ; then
+         local ndef="$ndef $var"
+         fi
+ done
+
+ if [ -n "$ndef" ] ; then 
+   die "Required variable(s) not defined:$ndef"
+ fi
+
+}
 
 if [ ! -f $CONFIG ] ; then
- echo "Could not open config file $CONFIG!"
- exit 1
+ die "Could not open config file $CONFIG!"
 fi
 
 source $CONFIG
+
+# check all required variables before continuing:
+required_vars "CONFIG SAMPLE_ROOT LOG_ROOT TEMP_DIR TSHARK GZIP CAP_INTERFACE SAMPLE_TIME NETWORK ARP_WARNLEVEL MAX_SAMPLE_SIZE ENORMOUS_SAMPLE"
+
+function cleanup()
+{
+  rm -f $TEMP_DIR/*.err.$$
+  rm -f $TEMP_DIR/*.$$
+  rm -f $LOG_ROOT/SNMP.LOG
+}
+
+function cleanexit()
+{
+  cleanup
+  exit 1
+}
+
+# trap ctrl-c:
+trap 'cleanexit' SIGINT
+
+function die()
+{
+    printf '%s\n' "$1" >&2
+    cleanup
+    exit 1
+}
+
+function do_alert()
+{
+
+ local level=$1
+ local text=$2
+ local inc_file=$3
+
+ # Log from text or file:
+ local syslog_msg="[$NETWORK] $text"
+ local pager_msg="[$NETWORK] $text"
+ local email_msg="[$NETWORK] $text"
+
+ if [ -n "$inc_file" ] && [ -f "$inc_file" ] ; then
+   local syslog_msg="-f $inc_file"
+   local pager_msg="head -1 $inc_file"
+   local email_msg="cat $inc_file"
+ fi
+
+ ### PAGER ALERTS ############################################################
+ 
+  if [ -n "$ALARM_PAGER" ] && [ "$level" = "CRITICAL" ] ; then
+    echo $pager_msg | $MAILPROG -s "[$NETWORK] $level: $text" $ALARM_PAGER
+    if [ $? != 0 ] ; then echo "WARN: $MAILPROG failed for ALARM_PAGER $ALARM_PAGER" >&2 ; fi
+  fi
+
+ ### EMAIL ALERTS ############################################################
+
+  if [ -n "$ALARM_EMAIL" ] ; then
+    echo $email_msg | $MAILPROG -s "[$NETWORK] $level: $text" $ALARM_EMAIL
+    if [ $? != 0 ] ; then echo "WARN: $MAILPROG failed for ALARM_EMAIL $ALARM_EMAIL" >&2 ; fi
+  fi
+
+ ### LOCAL SYSLOG ############################################################
+  if [ -n "$LOCAL_FACIL" ] ; then
+    $LOGGER -p $LOCAL_FACIL -e -t ixp-watch $syslog_msg
+    if [ $? != 0 ] ; then echo "WARN: $LOGGER failed for LOCAL_FACIL $LOCAL_FACIL" >&2 ; fi
+  fi
+
+ ### REMOTE SYSLOG ###########################################################
+  if [ -n "$LOGHOSTS" ] && [ -n "$LOG_FACILITY" ] ; then
+    for host in $LOGHOSTS
+    do
+     :
+    $LOGGER -p $LOG_FACILITY -e -n $host -t ixp-watch $syslog_msg
+    if [ $? != 0 ] ; then echo "WARN: $LOGGER failed for: $host $LOG_FACILITY" >&2 ; fi
+    done
+  fi
+
+ ### SLACK ALERT #############################################################
+  if [ -n "$SLACK_ALERTER" ] && [ -x "$SLACK_ALERTER" ] ; then
+
+    local color="danger"
+    if [ $level = "WARNING" ] ; then local color="warning" ; fi
+    if [ $level = "GOOD" ] ; then local color="good" ; fi
+
+    echo "$text" | $SLACK_ALERTER $SLACK_ALERTER_OPTS -t $color
+
+  fi
+
+ rm -f $inc_file
+
+ # die on fatal alerts:
+ if [ $level = "FATAL" ] ; then die "$level: $text" ; fi
+
+}
+
+function log_error {
+
+ local level=$1
+ local text=$2
+
+ echo "** $level: $text" >&2
+ echo "$text" >> ${TEMP_DIR}/${level}.err.$$
+
+}
+
+function check_errors {
+
+  local text=$1
+
+  if [ -z "$text" ] ; then
+   local text="*** Script error(s) occurred"
+  fi
+
+  # If errors logged by log_error files, do something with:
+  local warnfile="${TEMP_DIR}/WARNING.err.$$"
+  local fatalfile="${TEMP_DIR}/FATAL.err.$$"
+
+  #### FATAL - send alerts and stop:
+  if [ -f "$fatalfile" ] ; then
+
+   if [ -f "$warnfile" ] ; then
+     echo "ADDITIONAL WARNINGS LOGGED:" >> $fatalfile
+     cat $warnfile >> $fatalfile
+     rm -f $warnfile
+   fi
+
+     do_alert FATAL "*** FATAL: $text (Exited)" $fatalfile
+
+  fi
+
+  #### WARNINGs only, don't stop but send alerts:
+  if [ -f "$warnfile" ] ; then
+
+    do_alert WARNING "$text" $warnfile
+
+  fi
+
+}
 
 # Create TEMP_DIR if it doesn't exist:
 if [ ! -d $TEMP_DIR ] ; then mkdir -p $TEMP_DIR ; fi
@@ -51,62 +209,58 @@ if [ ! -d $TEMP_DIR ] ; then mkdir -p $TEMP_DIR ; fi
 # Find out what my IP Address is:
 
 # On FreeBSD this is:
-# MY_IP=`/sbin/ifconfig $CAP_INTERFACE | grep "inet " | head -1 | cut -d ' ' -f2`
+# MY_IP=$(/sbin/ifconfig $CAP_INTERFACE | grep "inet " | head -1 | cut -d ' ' -f2)
 
 # On Linux do: (old method)
-# MY_IP=`/sbin/ifconfig $CAP_INTERFACE | grep "inet addr" | awk '{print $3}' | cut -d: -f2`
+# MY_IP=$(/sbin/ifconfig $CAP_INTERFACE | grep "inet addr" | awk '{print $3}' | cut -d: -f2)
 
 # Linux new method:
-MY_IP=`/sbin/ip addr list $CAP_INTERFACE | grep "inet " | grep -v secondary | awk '{print $2}' | awk -F'/' '{print $1}'`
+MY_IP=$(/sbin/ip addr list $CAP_INTERFACE | grep "inet " | grep -v secondary | awk '{print $2}' | awk -F'/' '{print $1}')
 
 if [ -z "$MY_IP" ] ; then
 # Newer Linux - subtle change to ifconfig:
 # New versions output "inet x.x.x.x" not "inet addr x.x.x.x"
-MY_IP=`/sbin/ifconfig $CAP_INTERFACE | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*'`
+MY_IP=$(/sbin/ifconfig $CAP_INTERFACE | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*')
 fi
 
 if [ -z "$MY_IP" ] ; then
-  echo "WARNING: Unable to determine correct IP address for peering LAN interface: $CAP_INTERFACE." >> $TEMP_DIR/err.$$
-  echo "please check ixp-watch script variable MY_IP" >> $TEMP_DIR/err.$$
-  MY_IP=`/bin/hostname -I | awk '{print $1}'` >> $TEMP_DIR/err.$$
-  echo "Proceeding with $MY_IP for now. (Might be wrong)" >> $TEMP_DIR/err.$$
+  MY_IP=$(/bin/hostname -I | awk '{print $1}')
+  log_error WARNING "Unable to determine correct IP address for peering LAN interface: $CAP_INTERFACE."
+  log_error WARNING "- please check ixp-watch script variable MY_IP"
+  log_error WARNING "- Proceeding with $MY_IP for now. (Might be wrong)"
 fi
 
 if [ -z "$MY_IP" ] ; then
-  echo "WHOOPS: Unable to determine any IP address. Exiting." >> $TEMP_DIR/err.$$
-  WHOOPS=1
+  do_alert FATAL "Unable to determine IP address"
 fi
 
 # On Solaris this is:
-# MY_IP=`/usr/sbin/ifconfig $CAP_INTERFACE | grep "inet " | head -1 | cut -d ' ' -f2`
+# MY_IP=$(/usr/sbin/ifconfig $CAP_INTERFACE | grep "inet " | head -1 | cut -d ' ' -f2)
 
 # Or the even simpler "hostname -i" _might_ return the correct IP :-)
 
 ######### WILL NEED TO BE CHANGED TO SUIT YOUR OS:
 # Find out what my ethernet address is:
 # FreeBSD this is:
-# MY_ETHER=`/sbin/ifconfig $CAP_INTERFACE | grep ether | awk '{print $2}'`
+# MY_ETHER=$(/sbin/ifconfig $CAP_INTERFACE | grep ether | awk '{print $2}')
 
 # On Solaris this is:
-# MY_ETHER=`/usr/sbin/arp -a | grep " $CAP_INTERFACE" | awk '{print $5}'`
+# MY_ETHER=$(/usr/sbin/arp -a | grep " $CAP_INTERFACE" | awk '{print $5}')
 
 # Linux This is: (new output)
-MY_ETHER=`/sbin/ifconfig $CAP_INTERFACE | grep "ether " | awk '{print $2}' | tr [A-Z] [a-z]`
+MY_ETHER=$(/sbin/ifconfig $CAP_INTERFACE | grep "ether " | awk '{print $2}' | tr [A-Z] [a-z])
 
 if [ -z "$MY_ETHER" ] ; then
   # .. or maybe this: (old output)
-  MY_ETHER=`/sbin/ifconfig $CAP_INTERFACE | grep "HWaddr " | awk '{print $5}' | tr [A-Z] [a-z]`
+  MY_ETHER=$(/sbin/ifconfig $CAP_INTERFACE | grep "HWaddr " | awk '{print $5}' | tr [A-Z] [a-z])
 fi
 
 if [ -z "$MY_ETHER" ] ; then
-  echo "WARNING: Unable to determine MAC address for peering LAN interface: $CAP_INTERFACE." >> $TEMP_DIR/err.$$
-  echo "please check ixp-watch script variable MY_ETHER" >> $TEMP_DIR/err.$$
-  WHOOPS=1
+  log_error FATAL "Unable to determine MAC address for peering LAN interface: $CAP_INTERFACE please check ixp-watch script variable MY_ETHER"
 fi
 
 if [ ! -d "$SAMPLE_ROOT" ] ; then
-   echo "WHOOPS: Unable to locate directory: $SAMPLE_ROOT" >> $TEMP_DIR/err.$$
-   WHOOPS=1
+   log_error FATAL "Unable to locate directory SAMPLE_ROOT: $SAMPLE_ROOT"
 fi
 
 
@@ -115,43 +269,28 @@ fi
 ################################################################################
 umask 002
 
-YEAR=`date "+%Y"`
-MONTH=`date "+%m"`
-DAY=`date "+%d"`
+YEAR=$(date "+%Y")
+MONTH=$(date "+%m")
+DAY=$(date "+%d")
 
 SAMPLEDIR=$SAMPLE_ROOT/$YEAR/$MONTH/$DAY
 LOGDIR=$LOG_ROOT/$YEAR/$MONTH/$DAY
 
 ISODATE=$YEAR-$MONTH-$DAY
 
-E_DATE=`date +%s`  # Epoch UNIX date (for RRD graphs updates)
-FILEDATE=`date "+%Y-%m-%d-%H-%M"`  # Use as basis for file name. Do not change.
-STARTDATE=`date "+%Y-%m-%d %H:%M"` # Date used in reports. Adjust to taste.
-
-LOGFILE=$TEMP_DIR/ixp-watch.log
+E_DATE=$(date +%s)  # Epoch UNIX date (for RRD graphs updates)
+FILEDATE=$(date "+%Y-%m-%d-%H-%M")  # Use as basis for file name. Do not change.
+STARTDATE=$(date "+%Y-%m-%d %H:%M") # Date used in reports. Adjust to taste.
 
 # You may need to check SAMPLESIZE below in this script, if your ls -la
 # output is not the usual format. (Works on debian and other linux okay)
 
-if [ -f "$TEMP_DIR/err.$$" ] ; then
-  $MAILPROG -s "[$NETWORK] ixp-watch script error" $ALARM_EMAIL < $TEMP_DIR/err.$$
-fi
-
-
-if [ -n "$WHOOPS" ] ; then
-        echo "*** Script error occurred. Exiting!"
-        cat $TEMP_DIR/err.$$
-        rm -f $TEMP_DIR/err.$$
-        exit 2
-fi
-
-if [ -f "$TEMP_DIR/err.$$" ] ; then
-           rm -f $TEMP_DIR/err.$$
-fi
-
 ################################################################################
 ### Main script                                                             ####
 ################################################################################
+
+# check for any log_errors before proceeding:
+check_errors
 
 # Check that state alarms and current directories exist.
 # This is for the checking of "new" bad traffic as opposed to
@@ -167,7 +306,7 @@ if [ ! -d $LOG_ROOT/active ] ; then mkdir -p $LOG_ROOT/active ; fi
 # one directory was becoming very tedious to deal with!
 
 # create today's dirs, with some helpful symlinks to make
-# it quick to find todays files.
+# it quick to find today's files.
 
 if [ ! -d $LOG_ROOT/$YEAR/$MONTH/$DAY ] ; then
   mkdir -p $LOG_ROOT/$YEAR/$MONTH/$DAY
@@ -188,30 +327,28 @@ fi
 # If disk space is low, then try to delete some old sample files:
 if [ -n "${DISK_PERCENT_PROG:+1}" ]; then
 
-  DISK_PERCENT=`$DISK_PERCENT_PROG | tail -n+2 | sed s/[\ \%]//g`
+  DISK_PERCENT=$($DISK_PERCENT_PROG | tail -n+2 | sed s/[\ \%]//g)
 
   if [ $DISK_PERCENT -ge $DISK_PERCENT_MAX ] ; then
 	  # Delete samples > 6h old bigger than MAX_SAMPLE_SIZE
-    echo "WARNING: Disk space low! Deleted samples: " >> $TEMP_DIR/err.$$
-	  find $SAMPLE_ROOT -size +$MAX_SAMPLE_SIZE -cmin +360 >> $TEMP_DIR/err.$$
+ 	  deleted_samples=$(find $SAMPLE_ROOT -size +$MAX_SAMPLE_SIZE -cmin +360)
+    log_error WARNING "Disk space low! Deleted samples"
+    log_error WARNING "$deleted_samples"
 	  find $SAMPLE_ROOT -size +$MAX_SAMPLE_SIZE -cmin +360 -exec rm {} \;
   fi
 
  # See if that was enough, if not, delete more agressively:
- DISK_PERCENT=`$DISK_PERCENT_PROG | tail -n+2 | sed s/[\ \%]//g`
+ DISK_PERCENT=$($DISK_PERCENT_PROG | tail -n+2 | sed s/[\ \%]//g)
 
   if [ $DISK_PERCENT -ge $DISK_PERCENT_MAX ] ; then
     # Delete samples > 1h old bigger than 20M:
-    echo "" >> $TEMP_DIR/err.$$
-    echo "WARNING: Disk space still low! Deleted samples: " >> $TEMP_DIR/err.$$
-    find $SAMPLE_ROOT -size +20M -cmin +60 >> $TEMP_DIR/err.$$
+    deleted_samples=$(find $SAMPLE_ROOT -size +20M -cmin +60)
+    log_error WARNING "Disk space still low! Deleted samples"
+    log_error WARNING "$deleted_samples"
     find $SAMPLE_ROOT -size +20M -cmin +60 -exec rm {} \;
   fi
 
-  if [ -f "$TEMP_DIR/err.$$" ] ; then
-     $MAILPROG -s "[$NETWORK] Warning: disk space low - samples may be deleted" $ALARM_EMAIL < $TEMP_DIR/err.$$
-     rm $TEMP_DIR/err.$$
-  fi
+ check_errors
 
 fi
 
@@ -220,49 +357,58 @@ fi
 # Older versions of tshark:
 # $TSHARK -q -i $CAP_INTERFACE -a duration:$SAMPLE_TIME -w $SAMPLEDIR/$FILEDATE not host $MY_IP
 
-# Newer versions of tshark require -f "<capture_filter>"
-$TSHARK -q -i $CAP_INTERFACE -a duration:$SAMPLE_TIME -w $SAMPLEDIR/$FILEDATE -f "not host $MY_IP"
-
-
-STOPDATE=`date "+%Y-%m-%d %H:%M"`
-
-if [ ! -f $SAMPLEDIR/$FILEDATE ] ; then
- echo "Error: sample file $SAMPLEDIR/$FILEDATE could not be opened."
- echo "$STARTDATE: Error: sample file $SAMPLEDIR/$FILEDATE could not be opened." >> $LOGFILE
- exit 1
+if [ ! -x "$TSHARK" ] ; then
+   do_alert FATAL "Cannot execute: $TSHARK"
 fi
 
-SAMPLESIZE=`ls -la $SAMPLEDIR/$FILEDATE | awk '{print $5}'`
+# Newer versions of tshark require -f "<capture_filter>"
+$TSHARK -q -i $CAP_INTERFACE -a duration:$SAMPLE_TIME -w $SAMPLEDIR/$FILEDATE -f "not host $MY_IP" 2>${TEMP_DIR}/tshark_output.$$
+if [ $? != 0 ] ; then
+  errors=$(cat ${TEMP_DIR}/tshark_output.$$)
+  log_error FATAL "TSHARK cmd: $TSHARK -q -i $CAP_INTERFACE -a duration:$SAMPLE_TIME -w $SAMPLEDIR/$FILEDATE -f not host $MY_IP"
+  log_error FATAL "TSHARK returned: $?"
+  log_error FATAL "$errors"
+  check_errors FATAL "Sample capture returned error(s): $TSHARK"
+fi
+
+STOPDATE=$(date "+%Y-%m-%d %H:%M")
+
+if [ ! -f $SAMPLEDIR/$FILEDATE ] ; then
+ do_alert FATAL "Error: sample file $SAMPLEDIR/$FILEDATE could not be opened."
+fi
+
+SAMPLESIZE=$(ls -la $SAMPLEDIR/$FILEDATE | awk '{print $5}')
 
 # Do not process really big sample files (usually flooding)
 # also if the sample file is stupidly big, delete it, as it's unlikely
 # we will be able to process it sensibly.
 if [ $SAMPLESIZE -ge $MAX_SAMPLE_SIZE ] ; then
 
- echo "Error: sample file $SAMPLEDIR/$FILEDATE too big to process." > $TEMP_DIR/err.$$
- echo "$SAMPLESIZE bigger than MAX_SAMPLE_SIZE $MAX_SAMPLE_SIZE" >> $TEMP_DIR/err.$$
- echo "The sample file will NOT be processed by ixp-watch." >> $TEMP_DIR/err.$$
- echo "" >> $TEMP_DIR/err.$$
- echo "This may be caused by a member port going down, or as a result of other trouble." >> $TEMP_DIR/err.$$
- echo "If this error persists, you should run some sniffs on the network to find out" >> $TEMP_DIR/err.$$
- echo "what the source of the traffic spew is." >> $TEMP_DIR/err.$$
+ log_error FATAL "Error: sample file $SAMPLEDIR/$FILEDATE too big to process."
+ log_error FATAL "- $SAMPLESIZE bigger than MAX_SAMPLE_SIZE $MAX_SAMPLE_SIZE"
+ log_error FATAL "- The sample file will NOT be processed by ixp-watch."
+ log_error FATAL "- "
+ log_error FATAL "- This may be caused by a member port going down, or as a result of other trouble."
+ log_error FATAL "- If this error persists, you should run some sniffs on the network to find out"
+ log_error FATAL "- what the source of the traffic spew is."
 
   if [ $SAMPLESIZE -ge $ENORMOUS_SAMPLE ] ; then
-    echo "" >> $TEMP_DIR/err.$$
-    echo "Also, the file was considered ENORMOUS so I deleted it." >> $TEMP_DIR/err.$$
-    ls -lah $SAMPLEDIR/$FILEDATE >> $TEMP_DIR/err.$$
-    echo "" >> $TEMP_DIR/err.$$
+    dirlist=$(ls -lah $SAMPLEDIR/$FILEDATE)
     rm -f $SAMPLEDIR/$FILEDATE
+    log_error FATAL "- "
+    log_error FATAL "Also, the file was considered ENORMOUS so I deleted it."
+    log_error FATAL "$dirlist"
+    log_error FATAL "- "
   fi
 
   if [ -f $SAMPLEDIR/$FILEDATE ] ; then
    $GZIP -9 $SAMPLEDIR/$FILEDATE &
   fi
 
- $MAILPROG -s "[$NETWORK] Garbage or flooded traffic detected" $ALARM_EMAIL < $TEMP_DIR/err.$$
- rm $TEMP_DIR/err.$$
+ check_errors "Garbage or flooded traffic detected"
 
- exit 1
+ # check_errors will call die if FATAL errors logged.
+ # exit 1
 
 fi
 
@@ -292,7 +438,7 @@ $TSHARK -r $SAMPLEDIR/$FILEDATE -Y "snmp and not gre and not l2tp" | awk '{print
 # BGP - Members trying to open BGP to one of our sponged
 # addresses will show up here:
 if [ $BGPOPENS_OLD_FORMAT = "1" ] ; then
- $TSHARK -n -Y "tcp.flags.syn==1 and tcp.dstport==179 and not icmp" -r $SAMPLEDIR/$FILEDATE | awk '{print $3" -> " $5}' | sort -t\. -k3.1,3.3n -k4n | uniq > $LOG_ROOT/BGPOPENS.LOG
+ $TSHARK -n -Y "tcp.flags.syn==1 and tcp.dstport==179 and not icmp" -r $SAMPLEDIR/$FILEDATE | awk '{print $3" -> " $5}' | sort -t\.    -k4n | uniq > $LOG_ROOT/BGPOPENS.LOG
 else
  $TSHARK -NnN -T fields -e ip.src -e ip.src_host -e eth.src -e ip.dst -Y "not ipv6 and tcp.flags.syn==1 and tcp.dstport==179 and not icmp" -r $SAMPLEDIR/$FILEDATE | sort -t \. -k3.1,3.3n -k4n | uniq > $LOG_ROOT/BGPOPENS.LOG
 fi
@@ -329,7 +475,7 @@ cat $LOG_ROOT/IPV6_RA.LOG | sed 's/[^a-zA-Z0-9\t\ \:\>\-]/_/g' | awk '{print "ec
 NUM_SNMP=0
 
 if [ -f $LOG_ROOT/SNMP.LOG ] ; then
- NUM_SNMP=`grep -ci "SNMP " $LOG_ROOT/SNMP.LOG`
+ NUM_SNMP=$(grep -ci "SNMP " $LOG_ROOT/SNMP.LOG)
 fi
 
 
@@ -342,12 +488,12 @@ fi
 if [ "$SPANNING_TREE_BAD" = "1" ] ; then
 
 # Spanning Tree (specific checking because we consider it very very naughty!)
-   NUM_STP=`grep -ci "STP " $LOG_ROOT/NOT_IP.LOG`
+   NUM_STP=$(grep -ci "STP " $LOG_ROOT/NOT_IP.LOG)
 
    if [ ! "$NUM_STP" = "0" ] ; then
 
-   # Generate alarms for STP traffic only:
-       grep -i "STP " $LOG_ROOT/NOT_IP.LOG | awk '{print "echo \""$2"\" > "$2"_STP"}' | sh
+    # Generate alarms for STP traffic only:
+    grep -i "STP " $LOG_ROOT/NOT_IP.LOG | awk '{print "echo \""$2"\" > "$2"_STP"}' | sh
 
      for i in $( ls *_STP ); do
         if [ ! -f $LOG_ROOT/alarms/$i ] ; then
@@ -362,7 +508,7 @@ if [ "$SPANNING_TREE_BAD" = "1" ] ; then
       if [ -f *_STP ] ; then
        rm -f *_STP
        rm -f $LOG_ROOT/alarms/*_STP
-       /usr/bin/logger -p local4.debug -t ixp-watch "[$NETWORK] Spanning tree alarm cleared"
+       do_alert GOOD "Spanning tree alarm cleared"
       fi
 
    fi
@@ -399,146 +545,135 @@ grep "Who has" $TEMP_DIR/arps.$$ | awk '{print $12" ("$3") arping for "substr($1
 grep "Who has" $TEMP_DIR/arps.$$ | awk '{print "xxx arping for " substr($10,1,length($10)-1)}' | sort | uniq -c | sort -rn | head -30 > $LOG_ROOT/TOP_ARPREQ.LOG
 
 # Get some counts of things
-NUM_ARP=`grep -c "Who has" $TEMP_DIR/arps.$$`
-NUM_SPONGE_REPLY=`grep -c "is at $MY_ETHER" $TEMP_DIR/arps.$$`
-NUM_NOTIP=`wc -l $TEMP_DIR/notip.$$ |  awk '{print $1}'`
-NUM_ICMP=`wc -l $TEMP_DIR/icmp.$$ |  awk '{print $1}'`
-NUM_IP=`wc -l $TEMP_DIR/ip.$$ |  awk '{print $1}'`
-
-NUM_IP6=`wc -l $TEMP_DIR/ip6.$$ |  awk '{print $1}'`
-NUM_ICMP6=`wc -l $TEMP_DIR/icmp6.$$ |  awk '{print $1}'`
+NUM_ARP=$(grep -c "Who has" $TEMP_DIR/arps.$$)
+NUM_SPONGE_REPLY=$(grep -c "is at $MY_ETHER" $TEMP_DIR/arps.$$)
+NUM_NOTIP=$(wc -l $TEMP_DIR/notip.$$ |  awk '{print $1}')
+NUM_ICMP=$(wc -l $TEMP_DIR/icmp.$$ |  awk '{print $1}')
+NUM_IP=$(wc -l $TEMP_DIR/ip.$$ |  awk '{print $1}')
+NUM_IP6=$(wc -l $TEMP_DIR/ip6.$$ |  awk '{print $1}')
+NUM_ICMP6=$(wc -l $TEMP_DIR/icmp6.$$ |  awk '{print $1}')
+NUM_BGP=$(wc -l $LOG_ROOT/BGPOPENS.LOG | awk '{print $1}')
 
 # Breakdown of ICMP types:
-NUM_ICMP6_128=`cat $TEMP_DIR/icmpv6types.$$ | grep "^128" | cut -d: -f2`
-NUM_ICMP6_129=`cat $TEMP_DIR/icmpv6types.$$ | grep "^129" | cut -d: -f2`
-NUM_ICMP6_130=`cat $TEMP_DIR/icmpv6types.$$ | grep "^130" | cut -d: -f2`
-NUM_ICMP6_131=`cat $TEMP_DIR/icmpv6types.$$ | grep "^131" | cut -d: -f2`
-NUM_ICMP6_132=`cat $TEMP_DIR/icmpv6types.$$ | grep "^132" | cut -d: -f2`
-NUM_ICMP6_133=`cat $TEMP_DIR/icmpv6types.$$ | grep "^133" | cut -d: -f2`
-NUM_ICMP6_134=`cat $TEMP_DIR/icmpv6types.$$ | grep "^134" | cut -d: -f2`
-NUM_ICMP6_135=`cat $TEMP_DIR/icmpv6types.$$ | grep "^135" | cut -d: -f2`
-NUM_ICMP6_135=`cat $TEMP_DIR/icmpv6types.$$ | grep "^135" | cut -d: -f2`
-NUM_ICMP6_136=`cat $TEMP_DIR/icmpv6types.$$ | grep "^136" | cut -d: -f2`
-NUM_ICMP6_137=`cat $TEMP_DIR/icmpv6types.$$ | grep "^137" | cut -d: -f2`
-NUM_ICMP6_143=`cat $TEMP_DIR/icmpv6types.$$ | grep "^143" | cut -d: -f2`
+NUM_ICMP6_128=$(cat $TEMP_DIR/icmpv6types.$$ | grep "^128" | cut -d: -f2)
+NUM_ICMP6_129=$(cat $TEMP_DIR/icmpv6types.$$ | grep "^129" | cut -d: -f2)
+NUM_ICMP6_130=$(cat $TEMP_DIR/icmpv6types.$$ | grep "^130" | cut -d: -f2)
+NUM_ICMP6_131=$(cat $TEMP_DIR/icmpv6types.$$ | grep "^131" | cut -d: -f2)
+NUM_ICMP6_132=$(cat $TEMP_DIR/icmpv6types.$$ | grep "^132" | cut -d: -f2)
+NUM_ICMP6_133=$(cat $TEMP_DIR/icmpv6types.$$ | grep "^133" | cut -d: -f2)
+NUM_ICMP6_134=$(cat $TEMP_DIR/icmpv6types.$$ | grep "^134" | cut -d: -f2)
+NUM_ICMP6_135=$(cat $TEMP_DIR/icmpv6types.$$ | grep "^135" | cut -d: -f2)
+NUM_ICMP6_135=$(cat $TEMP_DIR/icmpv6types.$$ | grep "^135" | cut -d: -f2)
+NUM_ICMP6_136=$(cat $TEMP_DIR/icmpv6types.$$ | grep "^136" | cut -d: -f2)
+NUM_ICMP6_137=$(cat $TEMP_DIR/icmpv6types.$$ | grep "^137" | cut -d: -f2)
+NUM_ICMP6_143=$(cat $TEMP_DIR/icmpv6types.$$ | grep "^143" | cut -d: -f2)
 
-NUM_BGP=`wc -l $LOG_ROOT/BGPOPENS.LOG |  awk '{print $1}'`
+# Calculate numbers per minute:
+NUM_MINUTES=$(( $SAMPLE_TIME / 60 ))
+NUM_ARPS_MIN=$(( $NUM_ARP / $NUM_MINUTES ))
+NUM_NOTIP_MIN=$(( $NUM_NOTIP / $NUM_MINUTES ))
+NUM_ICMP_MIN=$(( $NUM_ICMP / $NUM_MINUTES ))
+NUM_ICMP6_MIN=$(( $NUM_ICMP6 / $NUM_MINUTES ))
+NUM_SPONGE_REPLY_MIN=$(( $NUM_SPONGE_REPLY / $NUM_MINUTES ))
+NUM_BGP_MIN=$(( $NUM_BGP / $NUM_MINUTES ))
 
-NUM_MINUTES=`expr $SAMPLE_TIME / 60`
+function report_header()
+{
+  local text=$1
+  local line=$(printf "%0.s-" {1..80})
 
-NUM_ARPS_MIN=`expr $NUM_ARP / $NUM_MINUTES`
+  printf ':::::: %s\n%s\n%s\n' "$line" "$text" "$line"
 
+}
+
+function report()
+{
+  local text=$1
+  local line=$(printf "%0.s-" {1..80})
+  local file=$2
+
+  if [ "$text" = "_LINE_" ] ; then
+   local $text=$line
+  fi
+
+   echo "$text">> $REPORT_FILE
+
+}
+
+function report_section_file()
+{
+
+  local title=$1
+  local file=$2
+
+  report_header "$title"
+  cat $file>> $REPORT_FILE
+
+}
+
+function create_report()
+{
+  local file=$1
+  local title=$2
+  REPORT_FILE=$file
+
+  local header=$(report_header "$title")
+  echo "$header" > $file
+
+}
 
 # Create report
-echo "--------------------------------------------------------------------------------" > $LOGDIR/$FILEDATE.TXT
-echo "$NETWORK LAN Traffic Summary Report - $ISODATE" >>$LOGDIR/$FILEDATE.TXT
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
+create_report $LOGDIR/$FILEDATE.TXT "$NETWORK LAN Traffic Summary Report - $ISODATE"
+report "Analysis based on a sample of $NUM_MINUTES minutes."
+report "Started at $STARTDATE, ended at $STOPDATE"
+report "The entire session is saved in:  $SAMPLEDIR/$FILEDATE.gz"
+report _LINE_
+report "ARP Queries......: $NUM_ARP"
+report "ARPs per minute..: $NUM_ARPS_MIN"
+report "IP Packets.......: $NUM_IP"
+report "IP6 Packets......: $NUM_IP6"
+report "ICMP Packets.....: $NUM_ICMP"
+report "ICMPv6 Packets...: $NUM_ICMP6"
+report "NON-IP Packets...: $NUM_NOTIP"
+report "ARPs Sponged.....: $NUM_SPONGE_REPLY"
+report "Dead BGP Peers...: $NUM_BGP"
 
-echo "Analysis based on a sample of $NUM_MINUTES minutes.">>$LOGDIR/$FILEDATE.TXT
+report_header "ICMPv6 TYPE SUMMARY"
 
-echo "Started at $STARTDATE, ended at $STOPDATE">>$LOGDIR/$FILEDATE.TXT
-echo "The entire session is saved in:  $SAMPLEDIR/$FILEDATE.gz">>$LOGDIR/$FILEDATE.TXT
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-echo "ARP Queries......: $NUM_ARP">>$LOGDIR/$FILEDATE.TXT
-echo "ARPs per minute..: $NUM_ARPS_MIN">>$LOGDIR/$FILEDATE.TXT
-echo "IP Packets.......: $NUM_IP">>$LOGDIR/$FILEDATE.TXT
-echo "IP6 Packets......: $NUM_IP6">>$LOGDIR/$FILEDATE.TXT
-echo "ICMP Packets.....: $NUM_ICMP">>$LOGDIR/$FILEDATE.TXT
-echo "ICMPv6 Packets...: $NUM_ICMP6">>$LOGDIR/$FILEDATE.TXT
-echo "NON-IP Packets...: $NUM_NOTIP">>$LOGDIR/$FILEDATE.TXT
-echo "ARPs Sponged.....: $NUM_SPONGE_REPLY">>$LOGDIR/$FILEDATE.TXT
-echo "Dead BGP Peers...: $NUM_BGP">>$LOGDIR/$FILEDATE.TXT
+  if [ -n "$NUM_ICMP6_128" ] ; then report "ICMPv6 128 Echo Request...........................: $NUM_ICMP6_128" ; fi
+  if [ -n "$NUM_ICMP6_129" ] ; then report "ICMPv6 129 Echo Reply.............................: $NUM_ICMP6_129" ; fi
+  if [ -n "$NUM_ICMP6_130" ] ; then report "ICMPv6 130 Multicast Listener Query...............: $NUM_ICMP6_130" ; fi
+  if [ -n "$NUM_ICMP6_131" ] ; then report "ICMPv6 131 Multicast Listener Report..............: $NUM_ICMP6_131" ; fi
+  if [ -n "$NUM_ICMP6_132" ] ; then report "ICMPv6 132 Multicast Listener Done................: $NUM_ICMP6_132" ; fi
+  if [ -n "$NUM_ICMP6_133" ] ; then report "ICMPv6 133 Router Solicitation (NDP)..............: $NUM_ICMP6_133" ; fi
+  if [ -n "$NUM_ICMP6_134" ] ; then report "ICMPv6 134 Router Advertisement (NDP).............: $NUM_ICMP6_134" ; fi
+  if [ -n "$NUM_ICMP6_135" ] ; then report "ICMPv6 135 Neighbor Solicitation (NDP)............: $NUM_ICMP6_135" ; fi
+  if [ -n "$NUM_ICMP6_136" ] ; then report "ICMPv6 136 Neighbor Advertisement (NDP)...........: $NUM_ICMP6_136" ; fi
+  if [ -n "$NUM_ICMP6_137" ] ; then report "ICMPv6 137 Redirect Message (NDP).................: $NUM_ICMP6_137" ; fi
+  if [ -n "$NUM_ICMP6_143" ] ; then report "ICMPv6 143 Multicast Listener Discovery (MLDv2)...: $NUM_ICMP6_143" ; fi
 
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-echo ":::::: ICMPv6 TYPE SUMMARY">>$LOGDIR/$FILEDATE.TXT
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-
-if [ -n "$NUM_ICMP6_128" ] ; then echo "ICMPv6 128 Echo Request...........................: $NUM_ICMP6_128">>$LOGDIR/$FILEDATE.TXT ; fi
-if [ -n "$NUM_ICMP6_129" ] ; then echo "ICMPv6 129 Echo Reply.............................: $NUM_ICMP6_129">>$LOGDIR/$FILEDATE.TXT ; fi
-if [ -n "$NUM_ICMP6_130" ] ; then echo "ICMPv6 130 Multicast Listener Query...............: $NUM_ICMP6_130">>$LOGDIR/$FILEDATE.TXT ; fi
-if [ -n "$NUM_ICMP6_131" ] ; then echo "ICMPv6 131 Multicast Listener Report..............: $NUM_ICMP6_131">>$LOGDIR/$FILEDATE.TXT ; fi
-if [ -n "$NUM_ICMP6_132" ] ; then echo "ICMPv6 132 Multicast Listener Done................: $NUM_ICMP6_132">>$LOGDIR/$FILEDATE.TXT ; fi
-if [ -n "$NUM_ICMP6_133" ] ; then echo "ICMPv6 133 Router Solicitation (NDP)..............: $NUM_ICMP6_133">>$LOGDIR/$FILEDATE.TXT ; fi
-if [ -n "$NUM_ICMP6_134" ] ; then echo "ICMPv6 134 Router Advertisement (NDP).............: $NUM_ICMP6_134">>$LOGDIR/$FILEDATE.TXT ; fi
-if [ -n "$NUM_ICMP6_135" ] ; then echo "ICMPv6 135 Neighbor Solicitation (NDP)............: $NUM_ICMP6_135">>$LOGDIR/$FILEDATE.TXT ; fi
-if [ -n "$NUM_ICMP6_136" ] ; then echo "ICMPv6 136 Neighbor Advertisement (NDP)...........: $NUM_ICMP6_136">>$LOGDIR/$FILEDATE.TXT ; fi
-if [ -n "$NUM_ICMP6_137" ] ; then echo "ICMPv6 137 Redirect Message (NDP).................: $NUM_ICMP6_137">>$LOGDIR/$FILEDATE.TXT ; fi
-if [ -n "$NUM_ICMP6_143" ] ; then echo "ICMPv6 143 Multicast Listener Discovery (MLDv2)...: $NUM_ICMP6_143">>$LOGDIR/$FILEDATE.TXT ; fi
-
-
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-echo ":::::: TOP 30 ARPERS">>$LOGDIR/$FILEDATE.TXT
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-cat $LOG_ROOT/TOP_ARPERS.LOG>>$LOGDIR/$FILEDATE.TXT
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-echo ":::::: TOP 30 ARPs Requested">>$LOGDIR/$FILEDATE.TXT
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-cat $LOG_ROOT/TOP_ARPREQ.LOG>>$LOGDIR/$FILEDATE.TXT
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-echo ":::::: BGP OPEN ATTEMPTS FOR RECLAIMED/DEAD IP ADDRESSES">>$LOGDIR/$FILEDATE.TXT
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-cat $LOG_ROOT/BGPOPENS.LOG>>$LOGDIR/$FILEDATE.TXT
+report_section_file "TOP 30 ARPERS" $LOG_ROOT/TOP_ARPERS.LOG
+report_section_file "TOP 30 ARPs Requested" $LOG_ROOT/TOP_ARPREQ.LOG
+report_section_file "BGP OPEN ATTEMPTS FOR RECLAIMED/DEAD IP ADDRESSES" $LOG_ROOT/BGPOPENS.LOG
 
 if [ -f $LOG_ROOT/SNMP.LOG ] ; then
- echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
- echo ":::::: MARTIAN/ODD SNMP  ">>$LOGDIR/$FILEDATE.TXT
- echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-cat $LOG_ROOT/SNMP.LOG>>$LOGDIR/$FILEDATE.TXT
+  report_section_file "MARTIAN/ODD SNMP" $LOG_ROOT/SNMP.LOG
 fi
 
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-echo ":::::: SPONGE ARP REPLY ACTIVITY">>$LOGDIR/$FILEDATE.TXT
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-cat $LOG_ROOT/ARPSPONGE.LOG>>$LOGDIR/$FILEDATE.TXT
-
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-echo ":::::: NON IP TRAFFIC">>$LOGDIR/$FILEDATE.TXT
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-cat $LOG_ROOT/NOT_IP.LOG >> $LOGDIR/$FILEDATE.TXT
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-echo ":::::: NON UNICAST IP TRAFFIC">>$LOGDIR/$FILEDATE.TXT
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-cat $LOG_ROOT/NON_UNICAST.LOG>>$LOGDIR/$FILEDATE.TXT
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-echo ":::::: ICMP MESSAGES">>$LOGDIR/$FILEDATE.TXT
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-cat $LOG_ROOT/ICMP.LOG>>$LOGDIR/$FILEDATE.TXT
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
+report_section_file "SPONGE ARP REPLY ACTIVITY" $LOG_ROOT/ARPSPONGE.LOG
+report_section_file "NON IP TRAFFIC" $LOG_ROOT/NOT_IP.LOG
+report_section_file "NON UNICAST IP TRAFFIC" $LOG_ROOT/NON_UNICAST.LOG
+report_section_file "ICMP MESSAGES" $LOG_ROOT/ICMP.LOG
 
 if [ -f $LOG_ROOT/IPV6_RA.LOG ] ; then
-echo ":::::: IPv6 ROUTER ADVERTISEMENTS">>$LOGDIR/$FILEDATE.TXT
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-cat $LOG_ROOT/IPV6_RA.LOG >>$LOGDIR/$FILEDATE.TXT
-echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
+ report_section_file "IPv6 ROUTER ADVERTISEMENTS" $LOG_ROOT/IPV6_RA.LOG
 fi
-
 
 if [ -f $TEMP_DIR/alarms.tmp ] ; then
   # Some new alarms have happened! Mail out the new alarms.
   # (and append to this report)
-  echo ":::::: NEW ALARMS SINCE LAST RUN:">>$LOGDIR/$FILEDATE.TXT
-  echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-  cat $TEMP_DIR/alarms.tmp >>$LOGDIR/$FILEDATE.TXT
-  echo "--------------------------------------------------------------------------------">>$LOGDIR/$FILEDATE.TXT
-  $MAILPROG -s "[$NETWORK] Non-IP Traffic Report ($FILEDATE)" $ALARM_EMAIL < $TEMP_DIR/alarms.tmp
-
- # Do syslog things if defined:
-
- if [ -n "$LOCAL_FACIL" ] ; then
-  cat $TEMP_DIR/alarms.tmp | /usr/bin/logger -p $LOCAL_FACIL -t ixp-watch
- fi
-
-# Note: Redhat/Linux doesn't support the "-h" option for syslog logger.
-# instead, use the equivalent "-n" or log to syslog locally.
-
- if [ -n "$LOGHOST" ] ; then
-  # LINUX:
-  cat $TEMP_DIR/alarms.tmp | /usr/bin/logger -p $LOG_FACILITY -n $LOGHOST -t ixp-watch
-  # FreeBSD:
-  # cat $TEMP_DIR/alarms.tmp | /usr/bin/logger -p $LOG_FACILITY -h $LOGHOST -t ixp-watch
- fi
-
-  rm $TEMP_DIR/alarms.tmp
+  report_section_file "NEW ALARMS SINCE LAST RUN:" $TEMP_DIR/alarms.tmp
+  do_alert WARNING "Non-IP Traffic Report ($FILEDATE)" $TEMP_DIR/alarms.tmp
 fi
 
 # Copy reports to HTML location if defined:
@@ -547,88 +682,59 @@ if [ -n "$HTML_DIR" ] ; then
 
    if [ ! -d $HTML_DIR ] ; then mkdir -p $HTML_DIR ; fi
 
-		if [ -f "$HTML_DIR/report_4.html" ] ; then
-		    rm -f $HTML_DIR/report_4.html
- 		fi
+		if [ -f "$HTML_DIR/report_4.html" ] ; then rm -f $HTML_DIR/report_4.html ; fi
+		if [ -f "$HTML_DIR/report_3.html" ] ; then mv $HTML_DIR/report_3.html $HTML_DIR/report_4.html ; fi
+		if [ -f "$HTML_DIR/report_2.html" ] ; then mv $HTML_DIR/report_2.html $HTML_DIR/report_3.html ; fi
+	  if [ -f "$HTML_DIR/report_1.html" ] ; then mv $HTML_DIR/report_1.html $HTML_DIR/report_2.html ; fi
 
-		if [ -f "$HTML_DIR/report_3.html" ] ; then
-   		mv $HTML_DIR/report_3.html $HTML_DIR/report_4.html
-		fi
-
-		if [ -f "$HTML_DIR/report_2.html" ] ; then
-			mv $HTML_DIR/report_2.html $HTML_DIR/report_3.html
-		fi
-		
-	  if [ -f "$HTML_DIR/report_1.html" ] ; then
-		   mv $HTML_DIR/report_1.html $HTML_DIR/report_2.html
-		fi
-		   
 		cp $LOGDIR/$FILEDATE.TXT $HTML_DIR/report_1.html
 
 fi
 
-# Update RRD files:
+
+function do_graph()
+{
+
+  local rrd=$1
+  local val=$2
+  local title=$3
+
+  if [ ! -f "$RRD_DIR/$rrd.rrd" ]  ; then $RRDTOOL create $RRD_DIR/$rrd.rrd --step=$SAMPLE_TIME DS:${rrd}:GAUGE:1800:U:U RRA:AVERAGE:0.5:1:96 ; fi
+
+  $RRDTOOL update $RRD_DIR/$rrd.rrd $E_DATE:${val}
+  $RRDTOOL graph $GRAPH_DIR/$rrd.png --vertical-label "$title" DEF:${rrd}=${RRD_DIR}/{$rrd}.rrd:${rrd}:AVERAGE AREA:$rrd#99CCFF > /dev/null
+
+}
+
+# Update RRD files
 
 if [ $DO_RRD = "1" ] ; then
-
-# Create RRD files if they don't exist:
 
  if [ ! -d $RRD_DIR ]   ; then mkdir -p $RRD_DIR ; fi
  if [ ! -d $GRAPH_DIR ] ; then mkdir -p $GRAPH_DIR ; fi
 
-if [ ! -f "$RRD_DIR/arp.rrd" ]    ; then $RRDTOOL create $RRD_DIR/arp.rrd --step=900 DS:arp:GAUGE:1800:U:U RRA:AVERAGE:0.5:1:96 ; fi
-if [ ! -f "$RRD_DIR/non-ip.rrd" ]  ; then $RRDTOOL create $RRD_DIR/non-ip.rrd --step=900 DS:non-ip:GAUGE:1800:U:U RRA:AVERAGE:0.5:1:96 ; fi
-if [ ! -f "$RRD_DIR/icmp.rrd" ]    ; then $RRDTOOL create $RRD_DIR/icmp.rrd --step=900 DS:icmp:GAUGE:1800:U:U RRA:AVERAGE:0.5:1:96 ; fi
-if [ ! -f "$RRD_DIR/icmp6.rrd" ]   ; then $RRDTOOL create $RRD_DIR/icmp6.rrd --step=900 DS:icmp6:GAUGE:1800:U:U RRA:AVERAGE:0.5:1:96 ; fi
-if [ ! -f "$RRD_DIR/sponge.rrd" ]  ; then $RRDTOOL create $RRD_DIR/sponge.rrd --step=900 DS:sponge:GAUGE:1800:U:U RRA:AVERAGE:0.5:1:96 ; fi
-if [ ! -f "$RRD_DIR/deadbgp.rrd" ] ; then $RRDTOOL create $RRD_DIR/deadbgp.rrd --step=900 DS:deadbgp:GAUGE:1800:U:U RRA:AVERAGE:0.5:1:96 ; fi
+ declare -A graphtitle
+ declare -A graphvalue
 
-# Update RRD files with current counters:
+ graphtitle[arp]="arp/min"           ; graphvalue[arp]=$NUM_ARPS_MIN
+ graphtitle[non-ip]="non-ip/min"     ; graphvalue[non-ip]=$NUM_NOTIP_MIN
+ graphtitle[icmp]="ICMP/min"         ; graphvalue[icmp]=$NUM_ICMP_MIN
+ graphtitle[icmp6]="ICMPv6/min"      ; graphvalue[icmp6]=$NUM_ICMP6_MIN
+ graphtitle[sponge]="ARPSponge/min"  ; graphvalue[sponge]=$NUM_SPONGE_REPLY_MIN
+ graphtitle[deadbgp]="DeadBGP/min"   ; graphvalue[deadbgp]=$NUM_BGP_MIN
 
-# ARP per minute:
-$RRDTOOL update $RRD_DIR/arp.rrd $E_DATE:$NUM_ARPS_MIN
-
-# Non IP Packets per Minute:
-NUM_NOTIP_MIN=`expr $NUM_NOTIP / $NUM_MINUTES`
-$RRDTOOL update $RRD_DIR/non-ip.rrd $E_DATE:$NUM_NOTIP_MIN
-
-# ICMP Packets per Minute:
-NUM_ICMP_MIN=`expr $NUM_ICMP / $NUM_MINUTES`
-$RRDTOOL update $RRD_DIR/icmp.rrd $E_DATE:$NUM_ICMP_MIN
-
-# ICMPv6 Packets per Minute:
-NUM_ICMP6_MIN=`expr $NUM_ICMP6 / $NUM_MINUTES`
-$RRDTOOL update $RRD_DIR/icmp6.rrd $E_DATE:$NUM_ICMP6_MIN
-
-# Sponged ARP requests per Minute:
-NUM_SPONGE_REPLY_MIN=`expr $NUM_SPONGE_REPLY / $NUM_MINUTES`
-$RRDTOOL update $RRD_DIR/sponge.rrd $E_DATE:$NUM_SPONGE_REPLY_MIN
-
-# Dead BGP peers:
-NUM_BGP_MIN=`expr $NUM_BGP / $NUM_MINUTES`
-$RRDTOOL update $RRD_DIR/deadbgp.rrd $E_DATE:$NUM_BGP_MIN
-
-$RRDTOOL graph $GRAPH_DIR/arp.png --vertical-label arp/min DEF:arpmin=$RRD_DIR/arp.rrd:arp:AVERAGE AREA:arpmin#99CCFF > /dev/null
-$RRDTOOL graph $GRAPH_DIR/non-ip.png --vertical-label non-ip/min DEF:non-ip=$RRD_DIR/non-ip.rrd:non-ip:AVERAGE AREA:non-ip#99CCFF > /dev/null
-$RRDTOOL graph $GRAPH_DIR/icmp.png --vertical-label ICMP/min DEF:icmp=$RRD_DIR/icmp.rrd:icmp:AVERAGE AREA:icmp#99CCFF > /dev/null
-$RRDTOOL graph $GRAPH_DIR/icmp6.png --vertical-label ICMPv6/min DEF:icmp6=$RRD_DIR/icmp6.rrd:icmp6:AVERAGE AREA:icmp6#99CCFF > /dev/null
-$RRDTOOL graph $GRAPH_DIR/sponge.png --vertical-label ARPSponge/min DEF:sponge=$RRD_DIR/sponge.rrd:sponge:AVERAGE AREA:sponge#99CCFF > /dev/null
-$RRDTOOL graph $GRAPH_DIR/deadbgp.png --vertical-label DeadBGP/min DEF:deadbgp=$RRD_DIR/deadbgp.rrd:deadbgp:AVERAGE AREA:deadbgp#99CCFF > /dev/null
+ for graph in "${!graphtitle[@]}"; do
+  do_graph $graph "${graphvalue[$graph]}" "${graphtitle[$graph]}"
+ done
 
 fi
-
 
 if [ -f $TEMP_DIR/alarms_stp.tmp ] ; then
 
-  if [ -n "$ALARM_PAGER"] ; then
-    $MAILPROG -s "[$NETWORK] Spanning Tree Alarm - Please investigate" $ALARM_PAGER < $TEMP_DIR/alarms_stp.tmp
-  fi
  $TSHARK -n -r $SAMPLEDIR/$FILEDATE -Y stp >> $TEMP_DIR/alarms_stp.tmp
- $MAILPROG -s "[$NETWORK] Spanning Tree Alarm - Please investigate" $ALARM_EMAIL < $TEMP_DIR/alarms_stp.tmp
- rm $TEMP_DIR/alarms_stp.tmp
- /usr/bin/logger -p local4.debug -t ixp-watch "Spanning tree alarm"
-fi
+ do_alert CRITICAL "Spanning Tree Alarm - Please investigate" $TEMP_DIR/alarms_stp.tmp
 
+fi
 
 ### Excess ARP detection:
 
@@ -637,32 +743,23 @@ if [ $NUM_ARPS_MIN -ge $ARP_WARNLEVEL ] ; then
 echo "ARPS Per min is $NUM_ARPS_MIN" > $LOG_ROOT/alarms_arp.tmp
 
   if [ ! -f $LOG_ROOT/arpstorm.warn ] ; then
-   if [ -n "$ALARM_PAGER"] ; then
-     $MAILPROG -s "[$NETWORK] High number of ARPS in progress - Please investigate" $ALARM_PAGER < $LOG_ROOT/alarms_arp.tmp
-   fi
-
-   echo "" >> $LOG_ROOT/alarms_arp.tmp
    cat $LOGDIR/$FILEDATE.TXT >> $LOG_ROOT/alarms_arp.tmp
-   $MAILPROG -s "[$NETWORK] High number of ARPS in progress - Please investigate" $ALARM_EMAIL < $LOG_ROOT/alarms_arp.tmp
+
+   do_alert CRITICAL "High number of ARPS in progress - Please investigate" $LOG_ROOT/alarms_arp.tmp
    touch $LOG_ROOT/arpstorm.warn
-   /usr/bin/logger -p local4.debug -t ixp-watch "[$NETWORK] High number of ARPS in progress - $NUM_ARPS_MIN arps/min"
 
   fi
 
 else
 
  # ARP level normal. Remove arp storm detection files if they exist.
-  if [ -f $LOG_ROOT/alarms_arp.tmp ] ; then 
-    rm -f $LOG_ROOT/alarms_arp.tmp 
-  fi
 
   if [ -f $LOG_ROOT/arpstorm.warn ] ; then 
+    do_alert GOOD "ARP level within normal range - $NUM_ARPS_MIN arps/min"
     rm -f $LOG_ROOT/arpstorm.warn 
-    /usr/bin/logger -p local4.debug -t ixp-watch "[$NETWORK] ARP level within normal range - $NUM_ARPS_MIN arps/min"
   fi
 
 fi
-
 
 # Write metrics to file if we want this:
 
@@ -694,11 +791,7 @@ if [ -n "$REPORT_EMAIL" ] ; then
 fi
 
 # Clean up
-rm $TEMP_DIR/*.$$
-
-if [ -f $LOG_ROOT/SNMP.LOG ] ; then
- rm $LOG_ROOT/SNMP.LOG
-fi
+cleanup
 
 umask 002
 # Gzip the sample files. Tshark can read .gz files directly.
