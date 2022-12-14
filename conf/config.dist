@@ -89,7 +89,7 @@ COUNTSFILE=$TEMP_DIR/ixp-watch.$NETWORK.counts
 
 MAX_SAMPLE_SIZE=52428800  # Maximum sensible file size to try and process (50M)
 
-ENORMOUS_SAMPLE=$(( $MAX_SAMPLE_SIZE \* 25 ))  # If the file is too enormous, just delete it.
+ENORMOUS_SAMPLE=$(( $MAX_SAMPLE_SIZE * 25 ))  # If the file is too enormous, just delete it.
 
 # Disk space usage for disk where samples are stored.
 # (Comment this out to disable auto sample purge based on free disk space)
