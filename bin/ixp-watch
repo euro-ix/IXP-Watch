@@ -577,14 +577,22 @@ NUM_ICMP6_MIN=$(( $NUM_ICMP6 / $NUM_MINUTES ))
 NUM_SPONGE_REPLY_MIN=$(( $NUM_SPONGE_REPLY / $NUM_MINUTES ))
 NUM_BGP_MIN=$(( $NUM_BGP / $NUM_MINUTES ))
 
-function report_header()
+
+function _head()
 {
   local text=$1
   local line=$(printf "%0.s-" {1..80})
-
-  printf ':::::: %s\n%s\n%s\n' "$line" "$text" "$line"
-
+  printf '%s\n%s\n%s\n' "$line" ":::::: $text" "$line"
 }
+
+
+function report_header()
+{
+  local text=$1
+  local header=$(_head "$text")
+  echo "$header">> $REPORT_FILE
+}
+
 
 function report()
 {
@@ -593,10 +601,10 @@ function report()
   local file=$2
 
   if [ "$text" = "_LINE_" ] ; then
-   local $text=$line
+   local text=$line
   fi
 
-   echo "$text">> $REPORT_FILE
+  echo "$text">> $REPORT_FILE
 
 }
 
@@ -606,7 +614,8 @@ function report_section_file()
   local title=$1
   local file=$2
 
-  report_header "$title"
+  local header=$(_head "$title")
+  echo "$header">> $REPORT_FILE
   cat $file>> $REPORT_FILE
 
 }
@@ -617,10 +626,10 @@ function create_report()
   local title=$2
   REPORT_FILE=$file
 
-  local header=$(report_header "$title")
-  echo "$header" > $file
-
+  local header=$(_head "$title")
+  echo "$header"> $REPORT_FILE
 }
+
 
 # Create report
 create_report $LOGDIR/$FILEDATE.TXT "$NETWORK LAN Traffic Summary Report - $ISODATE"
