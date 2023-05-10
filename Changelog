@@ -1,3 +1,7 @@
+* 1.16a 2023-05-09 - robl
+  - Bugfix: Do not try to copy the report via slack on arp alert, only email.
+  - Bugfix: RRD Graph PNGs not updated.
+
 * 1.16 2022-12-14 - robl
    - Move things to functions to avoid repeated code in many places.
     - Error handling / alerting is now more consistent

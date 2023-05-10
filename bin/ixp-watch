@@ -1,5 +1,5 @@
 #!/bin/bash
-# ixp-watch version: 1.16
+# ixp-watch version: 1.16a
 # This file is part of IXP Watch
 #
 # IXP Watch is free software: you can redistribute it and/or modify it
@@ -97,6 +97,7 @@ function do_alert()
  local level=$1
  local text=$2
  local inc_file=$3
+ local email_file=$4
 
  # Log from text or file:
  local syslog_msg="[$NETWORK] $text"
@@ -104,9 +105,15 @@ function do_alert()
  local email_msg="[$NETWORK] $text"
 
  if [ -n "$inc_file" ] && [ -f "$inc_file" ] ; then
-   local syslog_msg="-f $inc_file"
-   local pager_msg=$(head -1 $inc_file)
-   local email_msg=$(cat $inc_file)
+   syslog_msg="-f $inc_file"
+   pager_msg=" $(head -1 $inc_file)"
+   email_msg="$(cat $inc_file)"
+ fi
+
+ if [ -n "$email_file" ] && [ -f "$email_file" ] ; then
+   # add copy of report/something else to the email output only:
+   email_msg="$email_msg\n$(cat $email_file)"
+
  fi
 
  ### PAGER ALERTS ############################################################
@@ -119,7 +126,7 @@ function do_alert()
  ### EMAIL ALERTS ############################################################
 
   if [ -n "$ALARM_EMAIL" ] ; then
-    echo "$email_msg" | $MAILPROG -s "[$NETWORK] $level: $text" $ALARM_EMAIL
+    echo -e "$email_msg" | $MAILPROG -s "[$NETWORK] $level: $text" $ALARM_EMAIL
     if [ $? != 0 ] ; then echo "WARN: $MAILPROG failed for ALARM_EMAIL $ALARM_EMAIL" >&2 ; fi
   fi
 
@@ -157,13 +164,14 @@ function do_alert()
     fi
 
   fi
-  
+
  rm -f $inc_file
 
  # die on fatal alerts:
  if [ $level = "FATAL" ] ; then die "$level: $text" ; fi
 
 }
+
 
 function log_error {
 
@@ -716,10 +724,10 @@ function do_graph()
   local val=$2
   local title=$3
 
-  if [ ! -f "$RRD_DIR/$rrd.rrd" ]  ; then $RRDTOOL create $RRD_DIR/$rrd.rrd --step=$SAMPLE_TIME DS:${rrd}:GAUGE:1800:U:U RRA:AVERAGE:0.5:1:96 ; fi
+  if [ ! -f "$RRD_DIR/${rrd}.rrd" ]  ; then $RRDTOOL create $RRD_DIR/${rrd}.rrd --step=$SAMPLE_TIME DS:${rrd}:GAUGE:1800:U:U RRA:AVERAGE:0.5:1:96 ; fi
 
-  $RRDTOOL update $RRD_DIR/$rrd.rrd $E_DATE:${val}
-  $RRDTOOL graph $GRAPH_DIR/$rrd.png --vertical-label "$title" DEF:${rrd}=${RRD_DIR}/{$rrd}.rrd:${rrd}:AVERAGE AREA:$rrd#99CCFF > /dev/null
+  $RRDTOOL update $RRD_DIR/${rrd}.rrd $E_DATE:${val}
+  $RRDTOOL graph $GRAPH_DIR/${rrd}.png --vertical-label "$title" DEF:${rrd}=${RRD_DIR}/${rrd}.rrd:${rrd}:AVERAGE AREA:"${rrd}#99CCFF"
 
 }
 
@@ -760,9 +768,8 @@ if [ $NUM_ARPS_MIN -ge $ARP_WARNLEVEL ] ; then
 echo "ARPS Per min is $NUM_ARPS_MIN" > $LOG_ROOT/alarms_arp.tmp
 
   if [ ! -f $LOG_ROOT/arpstorm.warn ] ; then
-   cat $LOGDIR/$FILEDATE.TXT >> $LOG_ROOT/alarms_arp.tmp
-
-   do_alert CRITICAL "High number of ARPS in progress - Please investigate" $LOG_ROOT/alarms_arp.tmp
+   
+   do_alert CRITICAL "High number of ARPS in progress - Please investigate" $LOG_ROOT/alarms_arp.tmp $LOGDIR/$FILEDATE.TXT
    touch $LOG_ROOT/arpstorm.warn
 
   fi
