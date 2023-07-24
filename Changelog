@@ -1,3 +1,9 @@
+* 1.17 2023-07-24 - robl
+  - ixp-watch-tidy: get config options from config file.
+  - ixp-watch-tidy: Option to purge reports as well as samples.
+  - install.sh: prompt for purge settings.
+  - Configurable report file extension. .TXT by default.
+
 * 1.16a 2023-05-09 - robl
   - Bugfix: Do not try to copy the report via slack on arp alert, only email.
   - Bugfix: RRD Graph PNGs not updated.

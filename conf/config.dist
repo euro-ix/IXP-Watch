@@ -101,8 +101,11 @@ DISK_PERCENT_MAX=95   # Max disk use before deleting samples.
 # the old format (no resolving), set BGPOPENS_OLD_FORMAT=1.
 BGPOPENS_OLD_FORMAT=1
 
+# Reports file extension:
+REP_EXTN='TXT'
+
 #
-# Optional tools settings (sponge, auto_sponge, update_ethers)
+# Optional tools settings (sponge, auto_sponge, update_ethers, ixpwatch-tidy)
 #
 MY_NET="5.57.80.0"  # network base address
 MASK="22"           # network CIDR mask

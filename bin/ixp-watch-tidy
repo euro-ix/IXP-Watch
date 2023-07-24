@@ -45,38 +45,68 @@ while getopts ${optstring} arg; do
 done
 
 
-if [ ! -f $CONFIG ] ; then
- echo "Could not open config file $CONFIG!"
+if [ ! -f ${CONFIG} ] ; then
+ echo "Could not open config file ${CONFIG}!"
  exit 1
 fi
 
-source $CONFIG
+source ${CONFIG}
 
-
-if [ ! -d "$SAMPLE_ROOT" ] ; then
-
-	echo "Unable to locate directory: $SAMPLE_ROOT"
-	exit 1
-
+if [ ! -d "${SAMPLE_ROOT}" ] ; then
+        echo "ERROR: SAMPLE_ROOT not found: ${SAMPLE_ROOT}!"
+        exit 1
 fi
 
-cd $SAMPLE_ROOT
+cd ${SAMPLE_ROOT}
 
 # Check that we can cd in the right directory before we start
 # trying to delete stuff!
 
-if [ "$PWD" != "$SAMPLE_ROOT" ] ; then
+if [ "${PWD}" != "${SAMPLE_ROOT}" ] ; then
+        echo "ERROR: Unable to cd to ${SAMPLE_ROOT}!"
+        exit 1
+fi
 
-	echo "ERROR: Unable to cd to $SAMPLE_ROOT!"
-	exit 1
+# Remove samples files over 10, (or PURGE_SAMPLE_DAYS if set) days old:
+find ${SAMPLE_ROOT} -type f -ctime +${PURGE_SAMPLE_DAYS:-10} -exec rm {} \;
+#find ${SAMPLE_ROOT} -type f -ctime +${PURGE_SAMPLE_DAYS:-10} -exec ls {} \;
+
+# Remove empty directories:
+find ${SAMPLE_ROOT} -type d -empty -exec rmdir {} \;
+#find $SAMPLE_ROOT -type d -empty -exec ls {} \;
+
+# Compress reports over ZIP_REPORTS_DAYS old:
+if [ -n "${ZIP_REPORTS_DAYS}" ] ; then
+
+   if [ ! -d "${LOG_ROOT}" ] ; then
+      echo "ERROR: LOG_ROOT not found: ${LOG_ROOT}!"
+      exit 1
+   fi
+
+   REP_EXTN=${REP_EXTN:=TXT}
+   PURGE_REP_EXTN="${REP_EXTN}.gz"
+
+   find ${LOG_ROOT} -type f -ctime +${ZIP_REPORTS_DAYS} -name "*.${REP_EXTN}" -exec ${GZIP} -9 {} \;
 
 fi
 
-# Remove samples files over 7 days old:
-find $SAMPLE_ROOT -type f -ctime +7 -exec rm {} \;
-# find $SAMPLE_ROOT -type f -ctime +7 -exec ls {} \;
+# Delete reports over PURGE_REPORTS_DAYS old:
+if [ ${PURGE_REPORTS_DAYS:=0} -gt 0 ] ; then
 
-# Remove empty directories:
-find $SAMPLE_ROOT -type d -empty -exec rmdir {} \;
-# find $SAMPLE_ROOT -type d -empty -exec ls {} \;
+   if [ ! -d "${LOG_ROOT}" ] ; then
+      echo "ERROR: LOG_ROOT not found: ${LOG_ROOT}!"
+      exit 1
+   fi
 
+   # Safety check before doing mass-delete:
+   cd ${LOG_ROOT}
+   if [ "${PWD}" != "${LOG_ROOT}" ] ; then
+     echo "ERROR: Unable to cd to ${LOG_ROOT}!"
+     exit 1
+   fi
+
+   PURGE_REP_EXTN=${PURGE_REP_EXTN:=$REP_EXTN}
+
+   find ${LOG_ROOT} -type f -ctime +${PURGE_REPORTS_DAYS} -name "*.${PURGE_REP_EXTN}" -exec rm {} \;
+
+fi

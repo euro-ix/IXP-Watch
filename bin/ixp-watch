@@ -298,6 +298,8 @@ E_DATE=$(date +%s)  # Epoch UNIX date (for RRD graphs updates)
 FILEDATE=$(date "+%Y-%m-%d-%H-%M")  # Use as basis for file name. Do not change.
 STARTDATE=$(date "+%Y-%m-%d %H:%M") # Date used in reports. Adjust to taste.
 
+REP_EXTN=${REP_EXTN:=TXT}           # Report file extension "TXT" by default.
+
 # You may need to check SAMPLESIZE below in this script, if your ls -la
 # output is not the usual format. (Works on debian and other linux okay)
 
@@ -476,7 +478,7 @@ $TSHARK -T fields -e ipv6.src -e eth.src_resolved -r $SAMPLEDIR/$FILEDATE -Y "ic
 cat $TEMP_DIR/notip.$$ | awk '{print $3" -> "$5" "$6" "$7" "$8" "$9" "$10" "$11" "$12}' | sort | uniq -c | sort -rn > $LOG_ROOT/NOT_IP.LOG
 
 # Create alarms for bad traffic:
-cd  $LOG_ROOT/active/
+cd $LOG_ROOT/active/
 
 # Non IP Traffic (CDP etc.)
 cat $LOG_ROOT/NOT_IP.LOG | sed 's/[^a-zA-Z0-9\ \:\>\-]/_/g' | grep -v "STP " | awk '{print "echo \"Alarm for "$__"\" >"$2"__"$4}' | sh
@@ -531,12 +533,23 @@ if [ "$SPANNING_TREE_BAD" = "1" ] ; then
 
 fi
 
+# Clear old active:
+find $LOG_ROOT/active/ -type f -ctime +7 -exec rm {} \;
 
-for i in $( ls ); do
- if [ ! -f $LOG_ROOT/alarms/$i ] ; then
- cat $i >> $TEMP_DIR/alarms.tmp
- cp $i  $LOG_ROOT/alarms/
- fi
+# Remove alarm states for traffic no longer active:
+for file in ${LOG_ROOT}/alarms/* ; do
+   if [ ! -f "${LOG_ROOT}/active/${file##*/}" ] ; then
+     rm -f ${file}
+   fi
+done
+
+# Log new alarms, create state for things we just 
+# alerted about, so we don't alert again:
+for file in ${LOG_ROOT}/active/* ; do
+   if [ ! -f "${LOG_ROOT}/alarms/${file##*/}" ] ; then
+     cat ${file} >> $TEMP_DIR/alarms.tmp
+     cp ${file} $LOG_ROOT/alarms/
+   fi
 done
 
 # Take the ICMP output and munge it to report:
@@ -648,7 +661,7 @@ function create_report()
 
 
 # Create report
-create_report $LOGDIR/$FILEDATE.TXT "$NETWORK LAN Traffic Summary Report - $ISODATE"
+create_report $LOGDIR/$FILEDATE.$REP_EXTN "$NETWORK LAN Traffic Summary Report - $ISODATE"
 report "Analysis based on a sample of $NUM_MINUTES minutes."
 report "Started at $STARTDATE, ended at $STOPDATE"
 report "The entire session is saved in:  $SAMPLEDIR/$FILEDATE.gz"
@@ -712,7 +725,7 @@ if [ -n "$HTML_DIR" ] ; then
 		if [ -f "$HTML_DIR/report_2.html" ] ; then mv $HTML_DIR/report_2.html $HTML_DIR/report_3.html ; fi
 	  if [ -f "$HTML_DIR/report_1.html" ] ; then mv $HTML_DIR/report_1.html $HTML_DIR/report_2.html ; fi
 
-		cp $LOGDIR/$FILEDATE.TXT $HTML_DIR/report_1.html
+		cp $LOGDIR/$FILEDATE.$REP_EXTN $HTML_DIR/report_1.html
 
 fi
 
@@ -727,7 +740,7 @@ function do_graph()
   if [ ! -f "$RRD_DIR/${rrd}.rrd" ]  ; then $RRDTOOL create $RRD_DIR/${rrd}.rrd --step=$SAMPLE_TIME DS:${rrd}:GAUGE:1800:U:U RRA:AVERAGE:0.5:1:96 ; fi
 
   $RRDTOOL update $RRD_DIR/${rrd}.rrd $E_DATE:${val}
-  $RRDTOOL graph $GRAPH_DIR/${rrd}.png --vertical-label "$title" DEF:${rrd}=${RRD_DIR}/${rrd}.rrd:${rrd}:AVERAGE AREA:"${rrd}#99CCFF"
+  $RRDTOOL graph $GRAPH_DIR/${rrd}.png --vertical-label "$title" DEF:${rrd}=${RRD_DIR}/${rrd}.rrd:${rrd}:AVERAGE AREA:"${rrd}#99CCFF" > /dev/null
 
 }
 
@@ -769,7 +782,7 @@ echo "ARPS Per min is $NUM_ARPS_MIN" > $LOG_ROOT/alarms_arp.tmp
 
   if [ ! -f $LOG_ROOT/arpstorm.warn ] ; then
    
-   do_alert CRITICAL "High number of ARPS in progress - Please investigate" $LOG_ROOT/alarms_arp.tmp $LOGDIR/$FILEDATE.TXT
+   do_alert CRITICAL "High number of ARPS in progress - Please investigate" $LOG_ROOT/alarms_arp.tmp $LOGDIR/$FILEDATE.$REP_EXTN
    touch $LOG_ROOT/arpstorm.warn
 
   fi
@@ -811,7 +824,7 @@ fi
 # If you want to send full reports to e-mail:
 
 if [ -n "$REPORT_EMAIL" ] ; then
- $MAILPROG -s "[$NETWORK] Traffic Summary Report" $REPORT_EMAIL< $LOGDIR/$FILEDATE.TXT
+ $MAILPROG -s "[$NETWORK] Traffic Summary Report" $REPORT_EMAIL< $LOGDIR/$FILEDATE.$REP_EXTN
 fi
 
 # Clean up

@@ -24,6 +24,10 @@ DEF_LINK_DIR="/usr/local/bin"
 DEF_DATA_DIR="/var/ixpwatch"
 DEF_CONF_DIR="/etc/ixpwatch"
 
+DEF_PURGE_SAMPLE_DAYS=10
+DEF_ZIP_REPORTS_DAYS=30
+DEF_PURGE_REPORTS_DAYS=0
+
 DEF_LOGGER="/usr/bin/logger"
 DEF_LOGHOSTS="192.168.100.10 192.168.200.20"
 
@@ -135,7 +139,7 @@ INSTALLDIR=$( get_prompt "Script install directory" ${DEF_INSTALL_DIR} )
 
 echo ""
 echo "Data directory setup. Must be a location with sufficient space"
-echo "for example 5-10G for sample and report storage."
+echo "for example 15-20G for sample and report storage."
 echo ""
 
 DATA_DIR=$( get_prompt "Data directory"          "${DEF_DATA_DIR}" )
@@ -146,6 +150,9 @@ LOG_ROOT="${DATA_DIR}/watch"
 TEMP_DIR="${DATA_DIR}/tmp"
 
 DEF_HTML_DIR="${DATA_DIR}/www"
+
+PURGE_SAMPLE_DAYS=$( get_prompt "Days to keep capture sample files"   "${DEF_PURGE_SAMPLE_DAYS}" )
+ZIP_REPORTS_DAYS=$( get_prompt  "Compress reports older than (days)"  "${DEF_ZIP_REPORTS_DAYS}" )
 
 echo ""
 CAP_INTERFACE=$( get_prompt "Peering LAN capture interface"  ${DEF_CAP_INTERFACE} )
